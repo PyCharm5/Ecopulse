@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Рейтинг участников{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --primary-green: #1B4B43;
+        --bg-beige: #F2EFE4;
+        --accent-red: #E74C3C;
+        --accent-yellow: #F1C40F;
+        --border-thick: 2px solid #1B4B43;
+        --radius-main: 12px;
+    }
+
+    /* Заголовок страницы */
+    .rating-header {
+        background-color: var(--bg-beige);
+        padding: 30px;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        margin-bottom: 30px;
+        color: var(--primary-green);
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        box-shadow: 0 4px 0 rgba(27, 75, 67, 0.1);
+    }
+    
+    .rating-header h1 {
+        margin: 0;
+        font-weight: 800;
+        font-size: 2rem;
+    }
+    
+    .rating-header p {
+        margin: 5px 0 0;
+        opacity: 0.8;
+        font-weight: 600;
+    }
+
+    /* Карточки сводки (верхний блок) */
+    .stats-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+    
+    .summary-card {
+        background: white;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        padding: 20px;
+        text-align: center;
+        transition: transform 0.2s;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .summary-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .summary-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--primary-green);
+        margin: 10px 0;
+        line-height: 1;
+    }
+    
+    .summary-label {
+        color: #666;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    /* Список рейтинга */
+    .rating-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    /* Карточка участника */
+    .user-rank-card {
+        display: flex;
+        align-items: center;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: var(--radius-main);
+        padding: 15px 25px;
+        transition: all 0.2s;
+        position: relative;
+    }
+
+    .user-rank-card:hover {
+        border-color: var(--primary-green);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        transform: scale(1.01);
+    }
+
+    /* Стили для топ-3 */
+    .rank-1 { border: 2px solid #F1C40F; background: linear-gradient(to right, #fff, #fffbf0); }
+    .rank-2 { border: 2px solid #95a5a6; background: linear-gradient(to right, #fff, #f4f6f7); }
+    .rank-3 { border: 2px solid #d35400; background: linear-gradient(to right, #fff, #fff5f0); }
+    
+    /* Подсветка текущего пользователя */
+    .current-user-highlight {
+        border: 3px solid var(--primary-green) !important;
+        background-color: #e8f5e9 !important;
+        box-shadow: 0 0 20px rgba(27, 75, 67, 0.15);
+        position: relative;
+        z-index: 2;
+    }
+    
+    .current-user-label {
+        position: absolute;
+        top: -10px;
+        right: 20px;
+        background: var(--primary-green);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    /* Номер места */
+    .rank-badge {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 1.2rem;
+        margin-right: 20px;
+        color: #555;
+        background: #eee;
+        flex-shrink: 0;
+    }
+
+    .rank-1 .rank-badge { background: #F1C40F; color: white; box-shadow: 0 2px 5px rgba(241, 196, 15, 0.3); }
+    .rank-2 .rank-badge { background: #95a5a6; color: white; }
+    .rank-3 .rank-badge { background: #d35400; color: white; }
+    .current-user-highlight .rank-badge { background: var(--primary-green); color: white; }
+
+    /* Аватар */
+    .user-avatar-small {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid #eee;
+        margin-right: 20px;
+        flex-shrink: 0;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .user-avatar-small img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .user-avatar-small i {
+        color: #ccc;
+        font-size: 1.5rem;
+    }
+
+    /* Информация о пользователе */
+    .user-info {
+        flex: 1;
+    }
+    
+    .user-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .role-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        font-weight: 700;
+    }
+    .role-admin { background: var(--accent-red); color: white; }
+    .role-worker { background: var(--accent-yellow); color: black; }
+
+    .user-stats-row {
+        display: flex;
+        gap: 20px;
+        font-size: 0.85rem;
+        color: #777;
+        margin-top: 5px;
+    }
+    
+    .stat-pill {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .stat-pill i { font-size: 0.9rem; }
+
+    /* Очки справа */
+    .points-display {
+        text-align: right;
+        min-width: 100px;
+    }
+    
+    .points-val {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--primary-green);
+        line-height: 1;
+    }
+    
+    .points-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #999;
+        margin-top: 3px;
+    }
+    
+    /* Кубки для топ-3 */
+    .trophy-icon {
+        font-size: 2rem;
+        margin-left: 20px;
+        opacity: 0.9;
+    }
+    .trophy-gold { color: #F1C40F; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); }
+    .trophy-silver { color: #95a5a6; }
+    .trophy-bronze { color: #d35400; }
+
+    @media (max-width: 600px) {
+        .user-stats-row { flex-direction: column; gap: 2px; }
+        .trophy-icon { display: none; }
+        .rank-badge { width: 35px; height: 35px; font-size: 1rem; margin-right: 10px; }
+        .user-avatar-small { width: 40px; height: 40px; margin-right: 10px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rating-header">
+    <div style="background: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--accent-yellow); box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <i class="fas fa-trophy"></i>
+    </div>
+    <div>
+        <h1>Зал славы</h1>
+        <p>Рейтинг самых активных участников эко-движения</p>
+    </div>
+</div>
+
+<!-- Сводка -->
+<div class="stats-summary">
+    <div class="summary-card">
+        <div class="summary-value">{{ users|length }}</div>
+        <div class="summary-label">Всего участников</div>
+    </div>
+    <div class="summary-card">
+        <div class="summary-value">{{ users|sum(attribute='points') }}</div>
+        <div class="summary-label">Общий вклад (ФМ)</div>
+    </div>
+    <div class="summary-card" style="border-color: var(--accent-red);">
+        <div class="summary-value" style="color: var(--accent-red);">
+            {% for user in users %}
+                {% if user.id == current_user.id %}
+                    #{{ loop.index }}
+                {% endif %}
+            {% endfor %}
+        </div>
+        <div class="summary-label">Ваше место</div>
+    </div>
+</div>
+
+<!-- Список -->
+<div class="rating-list">
+    {% for user in users %}
+    <div class="user-rank-card rank-{{ loop.index }} {% if user.id == current_user.id %}current-user-highlight{% endif %}">
+        
+        {% if user.id == current_user.id %}
+            <div class="current-user-label">Это вы</div>
+        {% endif %}
+        
+        <!-- Номер места -->
+        <div class="rank-badge">{{ loop.index }}</div>
+        
+        <!-- Аватар -->
+        <div class="user-avatar-small">
+            {% if user.avatar %}
+                <img src="{{ user.avatar }}" alt="{{ user.username }}">
+            {% else %}
+                <i class="fas fa-user"></i>
+            {% endif %}
+        </div>
+        
+        <!-- Инфо -->
+        <div class="user-info">
+            <div class="user-name">
+                {{ user.username }}
+                {% if user.is_admin %}
+                    <span class="role-badge role-admin">Admin</span>
+                {% elif user.is_worker %}
+                    <span class="role-badge role-worker">Staff</span>
+                {% endif %}
+            </div>
+            
+            <div class="user-stats-row">
+                <div class="stat-pill">
+                    <i class="fas fa-layer-group" style="color: #3498db;"></i>
+                    Уровень {{ user.level }}
+                </div>
+                <div class="stat-pill">
+                    <i class="fas fa-flag" style="color: var(--accent-red);"></i> 
+                    {{ user.total_reports or 0 }} заявок
+                </div>
+                <div class="stat-pill">
+                    <i class="fas fa-check-circle" style="color: #27AE60;"></i> 
+                    {{ user.total_completed or 0 }} решено
+                </div>
+            </div>
+        </div>
+        
+        <!-- Очки -->
+        <div class="points-display">
+            <div class="points-val">{{ user.points }}</div>
+            <div class="points-label">баллов</div>
+        </div>
+        
+        <!-- Кубок для топ-3 -->
+        {% if loop.index == 1 %}
+            <i class="fas fa-trophy trophy-icon trophy-gold"></i>
+        {% elif loop.index == 2 %}
+            <i class="fas fa-trophy trophy-icon trophy-silver"></i>
+        {% elif loop.index == 3 %}
+            <i class="fas fa-trophy trophy-icon trophy-bronze"></i>
+        {% endif %}
+        
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

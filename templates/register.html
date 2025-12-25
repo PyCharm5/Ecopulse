@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Регистрация - Профкоманды ФМ{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Переменные из base.html */
+    :root {
+        --primary-green: #1B4B43;
+        --bg-beige: #F2EFE4;
+        --accent-red: #E74C3C;
+        --accent-yellow: #F1C40F;
+        --accent-green: #27AE60;
+        --border-thick: 2px solid #1B4B43;
+        --radius-main: 12px;
+    }
+
+    /* Обертка для центрирования */
+    .auth-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 140px);
+        padding: 40px 20px;
+    }
+
+    .auth-card {
+        background: white;
+        width: 100%;
+        max-width: 450px;
+        padding: 40px;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        box-shadow: 0 15px 40px rgba(27, 75, 67, 0.1);
+    }
+
+    .auth-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .auth-header h2 {
+        font-weight: 800;
+        color: var(--primary-green);
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .auth-header p {
+        color: #666;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    /* Поля ввода */
+    .form-group {
+        margin-bottom: 20px;
+        position: relative;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--primary-green);
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+
+    .form-control-custom {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.2s, background-color 0.2s;
+        background-color: #f9f9f9;
+    }
+
+    .form-control-custom:focus {
+        outline: none;
+        border-color: var(--primary-green);
+        background-color: white;
+    }
+
+    .form-control-custom.valid { border-color: var(--accent-green); }
+    .form-control-custom.invalid { border-color: var(--accent-red); }
+
+    /* Кнопка */
+    .btn-register {
+        width: 100%;
+        padding: 14px;
+        background: var(--accent-red);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-weight: 800;
+        text-transform: uppercase;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: transform 0.1s, background-color 0.2s;
+        margin-top: 10px;
+    }
+
+    .btn-register:hover {
+        background-color: #c0392b;
+    }
+
+    .btn-register:active {
+        transform: scale(0.98);
+    }
+
+    /* Индикатор сложности пароля */
+    .password-strength {
+        height: 4px;
+        background: #eee;
+        border-radius: 2px;
+        margin-top: 8px;
+        overflow: hidden;
+        display: flex;
+    }
+
+    .strength-bar {
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s, background-color 0.3s;
+    }
+
+    .feedback-text {
+        font-size: 0.75rem;
+        margin-top: 5px;
+        font-weight: 600;
+        height: 15px;
+    }
+
+    /* Ссылки */
+    .auth-links {
+        text-align: center;
+        margin-top: 25px;
+        font-size: 0.9rem;
+        color: #666;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+
+    .auth-links a {
+        color: var(--primary-green);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .auth-links a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h2>Регистрация</h2>
+            <p>Присоединяйтесь к сообществу эко-активистов</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('register') }}" onsubmit="return validateForm()">
+            <div class="form-group">
+                <label class="form-label" for="username">Имя пользователя</label>
+                <input type="text" id="username" name="username" class="form-control-custom" placeholder="Придумайте никнейм" required>
+                <div id="usernameFeedback" class="feedback-text"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="email">Email</label>
+                <input type="email" id="email" name="email" class="form-control-custom" placeholder="example@mail.ru" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Пароль</label>
+                <input type="password" id="password" name="password" class="form-control-custom" placeholder="Минимум 6 символов" required oninput="checkPasswordStrength()">
+                
+                <!-- Полоска сложности -->
+                <div class="password-strength">
+                    <div id="strengthBar" class="strength-bar"></div>
+                </div>
+                <div id="passwordFeedback" class="feedback-text" style="color: #999;">Введите пароль</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="confirm_password">Подтверждение пароля</label>
+                <input type="password" id="confirm_password" name="confirm_password" class="form-control-custom" placeholder="Повторите пароль" required oninput="checkMatch()">
+                <div id="matchFeedback" class="feedback-text"></div>
+            </div>
+
+            <button type="submit" class="btn-register">
+                Создать аккаунт
+            </button>
+        </form>
+
+        <div class="auth-links">
+            Уже есть аккаунт? <a href="{{ url_for('login') }}">Войти</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    const colors = {
+        red: '#E74C3C',
+        yellow: '#F1C40F',
+        green: '#27AE60',
+        grey: '#ccc'
+    };
+
+    function checkPasswordStrength() {
+        const password = document.getElementById('password').value;
+        const bar = document.getElementById('strengthBar');
+        const feedback = document.getElementById('passwordFeedback');
+        
+        let strength = 0;
+        
+        if (password.length >= 6) strength++;
+        if (password.length >= 10) strength++;
+        if (/[A-Z]/.test(password)) strength++;
+        if (/[0-9]/.test(password)) strength++;
+        if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+        // Визуализация
+        let width = 0;
+        let color = colors.grey;
+        let text = 'Слишком короткий';
+
+        if (password.length > 0 && password.length < 6) {
+            width = 20;
+            color = colors.red;
+            text = 'Слишком короткий';
+        } else if (strength < 3) {
+            width = 50;
+            color = colors.yellow;
+            text = 'Средняя надежность';
+        } else {
+            width = 100;
+            color = colors.green;
+            text = 'Отличный пароль';
+        }
+
+        if (password.length === 0) {
+            width = 0;
+            text = 'Введите пароль';
+        }
+
+        bar.style.width = width + '%';
+        bar.style.backgroundColor = color;
+        feedback.textContent = text;
+        feedback.style.color = (width === 0) ? '#999' : color;
+        
+        checkMatch(); // Проверяем совпадение при изменении основного пароля
+    }
+
+    function checkMatch() {
+        const pass = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm_password').value;
+        const feedback = document.getElementById('matchFeedback');
+        const input = document.getElementById('confirm_password');
+
+        if (confirm.length === 0) {
+            feedback.textContent = '';
+            input.classList.remove('valid', 'invalid');
+            return;
+        }
+
+        if (pass === confirm) {
+            feedback.textContent = 'Пароли совпадают';
+            feedback.style.color = colors.green;
+            input.classList.add('valid');
+            input.classList.remove('invalid');
+        } else {
+            feedback.textContent = 'Пароли не совпадают';
+            feedback.style.color = colors.red;
+            input.classList.add('invalid');
+            input.classList.remove('valid');
+        }
+    }
+
+    function validateForm() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm_password').value;
+
+        if (username.length < 3) {
+            alert('Имя пользователя должно быть не менее 3 символов');
+            return false;
+        }
+
+        if (password.length < 6) {
+            alert('Пароль должен быть не менее 6 символов');
+            return false;
+        }
+
+        if (password !== confirm) {
+            alert('Пароли не совпадают');
+            return false;
+        }
+
+        return true;
+    }
+</script>
+{% endblock %}

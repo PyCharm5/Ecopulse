@@ -1,0 +1,690 @@
+{% extends "base.html" %}
+{% block title %}Карта проблем{% endblock %}
+{% block extra_css %}
+<style>
+    /* Скрываем флаг Leaflet для чистоты */
+    .leaflet-attribution-flag {
+        display: none !important;
+    }
+    
+    /* Стили для маркеров */
+    .custom-marker {
+        position: relative;
+        width: 40px;
+        height: 52px;
+        transition: transform 0.2s;
+    }
+    
+    .custom-marker:hover {
+        transform: scale(1.1);
+        z-index: 1000 !important;
+    }
+    
+    .marker-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid var(--primary-green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        position: relative;
+        z-index: 2;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+    
+    .marker-triangle {
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 14px solid var(--primary-green);
+        position: absolute;
+        bottom: 0;
+        left: 10px;
+        z-index: 1;
+    }
+    
+    .custom-marker-icon {
+        background: transparent !important;
+        border: none !important;
+    }
+
+    /* --- МОДАЛЬНЫЕ ОКНА --- */
+    .problem-modal {
+        display: none;
+        position: fixed; /* Fixed чтобы было по центру экрана */
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 750px;
+        max-width: 95vw;
+        max-height: 90vh;
+        z-index: 2000; /* Выше карты */
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        overflow: hidden; /* Чтобы скругления работали */
+        border: 2px solid var(--primary-green);
+    }
+    
+    /* Затемнение фона */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1999;
+        backdrop-filter: blur(2px);
+    }
+    
+    .modal-layout {
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        min-height: 450px;
+    }
+    
+    /* Левая часть (Фото) */
+    .photo-section {
+        flex: 1;
+        background-color: var(--bg-beige);
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-right: 1px solid #eee;
+    }
+    
+    .photo-upload-area {
+        width: 100%;
+        height: 100%;
+        min-height: 250px;
+        border: 2px dashed #ccc;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        cursor: pointer;
+        transition: border-color 0.2s;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .photo-upload-area:hover {
+        border-color: var(--primary-green);
+        background: #fafafa;
+    }
+    
+    .photo-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
+    /* Правая часть (Форма) */
+    .form-section {
+        flex: 1.4;
+        padding: 25px;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto; /* Скролл если форма длинная */
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    
+    .modal-title {
+        margin: 0;
+        color: var(--primary-green);
+        font-weight: 800;
+        font-size: 1.4rem;
+    }
+    
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #999;
+        transition: color 0.2s;
+    }
+    .close-btn:hover { color: var(--accent-red); }
+    
+    /* Элементы формы */
+    .form-control-custom {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+        margin-bottom: 15px;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+    
+    .form-control-custom:focus {
+        outline: none;
+        border-color: var(--primary-green);
+    }
+    
+    /* Категории */
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .cat-btn {
+        padding: 8px 5px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.1s;
+    }
+    
+    .cat-btn:hover { background: #f5f5f5; }
+    
+    .cat-btn.selected {
+        background: var(--primary-green);
+        color: white;
+        border-color: var(--primary-green);
+        box-shadow: 0 4px 10px rgba(27, 75, 67, 0.2);
+    }
+    
+    /* Сложность */
+    .severity-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        align-items: center;
+    }
+    
+    .severity-label { font-weight: 700; color: var(--primary-green); font-size: 0.9rem; }
+    
+    .sev-circles { display: flex; gap: 10px; }
+    
+    .sev-circle {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: white;
+        cursor: pointer;
+        opacity: 0.4;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+    }
+    
+    .sev-circle:hover { opacity: 0.7; transform: scale(1.1); }
+    .sev-circle.selected { opacity: 1; transform: scale(1.1); box-shadow: 0 0 0 2px #333; }
+    
+	.bg-min { background: #4CAF50; }
+    .bg-green { background: #27AE60; }
+    .bg-yellow { background: #F1C40F; }
+    .bg-orange { background: #e67e22; }
+    .bg-red { background: #E74C3C; }
+	.bg-max { background: #DC3522; }
+    
+    /* Кнопки действий */
+    .modal-footer {
+        margin-top: auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    
+    .btn-submit {
+        background: var(--accent-red);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: 800;
+        cursor: pointer;
+        text-transform: uppercase;
+        transition: transform 0.1s;
+    }
+    .btn-submit:hover { background: #c0392b; }
+    .btn-submit:active { transform: scale(0.95); }
+    
+    .reward-tag {
+        font-weight: 800;
+        color: var(--primary-green);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 1.1rem;
+    }
+    
+    /* Адаптив для модальных окон */
+    @media (max-width: 768px) {
+        .modal-layout { flex-direction: column; }
+        .photo-section { min-height: 180px; padding: 10px; }
+        .problem-modal { width: 95vw; height: auto; max-height: 95vh; }
+        .form-section { padding: 15px; }
+        .category-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Карта -->
+<div id="map"></div>
+
+<!-- Затемнение фона -->
+<div id="modalOverlay" class="modal-overlay" onclick="closeAllModals()"></div>
+
+<!-- 1. МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ -->
+<div id="addModal" class="problem-modal">
+    <div class="modal-layout">
+        <!-- Фото -->
+        <div class="photo-section">
+            <label class="photo-upload-area" id="uploadArea">
+                <input type="file" id="problemPhoto" accept="image/*" style="display: none;" onchange="previewPhoto(event)">
+                <div id="uploadPlaceholder" style="text-align: center;">
+                    <i class="fas fa-camera fa-3x" style="color: #ccc; margin-bottom: 10px;"></i>
+                    <div style="font-weight: 700; color: #999;">Добавить фото</div>
+                    <div style="font-size: 0.8rem; color: #bbb;">(Опционально)</div>
+                </div>
+                <div id="photoPreview" class="photo-preview" style="display: none;">
+                    <img id="previewImg" src="" alt="Preview">
+                </div>
+            </label>
+        </div>
+        
+        <!-- Форма -->
+        <div class="form-section">
+            <div class="modal-header">
+                <h2 class="modal-title">Новая проблема</h2>
+                <button class="close-btn" onclick="closeAllModals()">×</button>
+            </div>
+            
+            <input type="text" class="form-control-custom" id="probTitle" placeholder="Что случилось? (Например: Мусор в парке)">
+            
+            <div style="margin-bottom: 5px; font-weight: 700; color: var(--primary-green); font-size: 0.85rem;">КАТЕГОРИЯ</div>
+            <div class="category-grid">
+                <div class="cat-btn selected" onclick="selectCat('other', this)">⚠️ Другое</div>
+                <div class="cat-btn" onclick="selectCat('pollution', this)">♻️ Мусор</div>
+                <div class="cat-btn" onclick="selectCat('plants', this)">🌿 Растения</div>
+                <div class="cat-btn" onclick="selectCat('damage', this)">🔨 Поломка</div>
+                <div class="cat-btn" onclick="selectCat('water', this)">💧 Вода</div>
+                <div class="cat-btn" onclick="selectCat('animals', this)">🐾 Животные</div>
+            </div>
+            
+            <div class="severity-row">
+                <span class="severity-label">ВАЖНОСТЬ</span>
+                <div class="sev-circles">
+                    <div class="sev-circle bg-min" onclick="selectSev(1, this)">1</div>
+					<div class="sev-circle bg-green" onclick="selectSev(2, this)">2</div>
+                    <div class="sev-circle bg-yellow selected" onclick="selectSev(3, this)">3</div>
+                    <div class="sev-circle bg-orange" onclick="selectSev(4, this)">4</div>
+                    <div class="sev-circle bg-red" onclick="selectSev(5, this)">5</div>
+					<div class="sev-circle bg-max" onclick="selectSev(6, this)">6</div>
+                </div>
+            </div>
+            
+            <textarea class="form-control-custom" id="probDesc" style="flex: 1; min-height: 80px; resize: vertical;" placeholder="Опишите подробности..."></textarea>
+            
+            <div class="modal-footer">
+                <div class="reward-tag">
+                    <i class="fas fa-coins" style="color: var(--accent-yellow);"></i> +15
+                </div>
+                <button class="btn-submit" onclick="submitProblem()">Отправить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2. МОДАЛЬНОЕ ОКНО ПРОСМОТРА -->
+<div id="viewModal" class="problem-modal">
+    <div class="modal-layout">
+        <div class="photo-section" id="viewPhotoContainer">
+            <!-- Сюда JS вставит фото или заглушку -->
+            <i class="fas fa-image fa-4x" style="color: #ddd;"></i>
+        </div>
+        
+        <div class="form-section">
+            <div class="modal-header">
+                <h2 class="modal-title" id="viewTitle">Заголовок</h2>
+                <button class="close-btn" onclick="closeAllModals()">×</button>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <span id="viewCategoryBadge" style="padding: 4px 10px; border-radius: 15px; background: #eee; font-weight: 700; font-size: 0.8rem;">Категория</span>
+                <span id="viewSeverityBadge" style="padding: 4px 10px; border-radius: 15px; background: #eee; font-weight: 700; font-size: 0.8rem; margin-left: 5px;">Важность</span>
+            </div>
+            
+            <p id="viewDesc" style="color: #555; line-height: 1.6; flex: 1; overflow-y: auto;">
+                Описание проблемы...
+            </p>
+            
+            <div class="modal-footer">
+                <button style="background: white; border: 2px solid var(--primary-green); color: var(--primary-green); padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer;" onclick="showComplaintForm()">
+                    Пожаловаться
+                </button>
+                <button class="btn-submit" style="background: #27AE60;" onclick="completeProblem()">
+                    <i class="fas fa-check"></i> Выполнить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3. МОДАЛЬНОЕ ОКНО ЖАЛОБЫ -->
+<div id="complaintModal" class="problem-modal" style="width: 400px; height: auto; min-height: auto;">
+    <div style="padding: 25px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Пожаловаться</h3>
+            <button class="close-btn" onclick="closeAllModals()">×</button>
+        </div>
+        
+        <select class="form-control-custom" id="complaintReason">
+            <option value="">Выберите причину...</option>
+            <option value="spam">Спам / Реклама</option>
+            <option value="fake">Несуществующая проблема</option>
+            <option value="offensive">Оскорбительный контент</option>
+            <option value="duplicate">Дубликат</option>
+        </select>
+        
+        <textarea class="form-control-custom" id="complaintText" placeholder="Дополнительные детали..." style="min-height: 80px;"></textarea>
+        
+        <button class="btn-submit" style="width: 100%;" onclick="submitComplaint()">Отправить жалобу</button>
+    </div>
+</div>
+
+<script>
+    let map;
+    let markers = {};
+    let currentLatLng = null; // Координаты клика
+    
+    // Данные новой проблемы
+    let newProblemData = {
+        category: 'other',
+        severity: 3
+    };
+    
+    let currentViewId = null; // ID просматриваемой проблемы
+
+    // Инициализация карты
+    function initMap() {
+        // Получаем координаты города из localStorage (сохраненные в base.html)
+        const cityLat = parseFloat(localStorage.getItem('cityLat')) || 53.9925; // Дефолт Киселевск
+        const cityLng = parseFloat(localStorage.getItem('cityLng')) || 86.6669;
+        
+        map = L.map('map').setView([cityLat, cityLng], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Обработчик клика по карте
+        map.on('click', function(e) {
+            currentLatLng = e.latlng;
+            openAddModal();
+        });
+        
+        // Загрузка точек
+        loadProblems();
+    }
+    
+    // Загрузка проблем с API
+    async function loadProblems() {
+        try {
+            const response = await fetch('/api/problems');
+            const problems = await response.json();
+            
+            // Очищаем старые маркеры
+            for (let id in markers) {
+                map.removeLayer(markers[id]);
+            }
+            markers = {};
+            
+            // Добавляем новые
+            problems.forEach(p => {
+                addMarkerToMap(p);
+            });
+            
+        } catch (error) {
+            console.error('Ошибка загрузки проблем:', error);
+        }
+    }
+    
+    // Добавление маркера на карту
+    function addMarkerToMap(p) {
+        const iconMap = {
+            'pollution': '🚯', 'plants': '🌿', 'water': '💧', 
+            'damage': '🔨', 'animals': '🐕', 'other': '⚠️'
+        };
+        
+		
+		
+		
+		
+		
+		
+        const emoji = iconMap[p.category] || '⚠️';
+        
+        const customIcon = L.divIcon({
+            className: 'custom-marker-icon',
+            html: `
+                <div class="custom-marker">
+                    <div class="marker-circle">${emoji}</div>
+                    <div class="marker-triangle"></div>
+                </div>
+            `,
+            iconSize: [40, 52],
+            iconAnchor: [20, 52]
+        });
+        
+        const marker = L.marker([p.lat, p.lng], {icon: customIcon}).addTo(map);
+        marker.on('click', () => openViewModal(p));
+        markers[p.id] = marker;
+    }
+    
+    // --- УПРАВЛЕНИЕ МОДАЛЬНЫМИ ОКНАМИ ---
+    
+    function openAddModal() {
+        // Сброс формы
+        document.getElementById('probTitle').value = '';
+        document.getElementById('probDesc').value = '';
+        document.getElementById('problemPhoto').value = '';
+        document.getElementById('photoPreview').style.display = 'none';
+        document.getElementById('uploadPlaceholder').style.display = 'block';
+        
+        newProblemData = { category: 'other', severity: 3 };
+        
+        // Сброс визуального выбора
+        document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
+        document.querySelector('.cat-btn:first-child').classList.add('selected'); // Выбор 'other'
+        
+        document.querySelectorAll('.sev-circle').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.sev-circle')[1].classList.add('selected'); // Выбор 3
+        
+        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById('addModal').style.display = 'block';
+    }
+    
+    function closeAllModals() {
+        document.querySelectorAll('.problem-modal').forEach(m => m.style.display = 'none');
+        document.getElementById('modalOverlay').style.display = 'none';
+    }
+    
+    // Выбор категории
+    window.selectCat = function(cat, element) {
+        newProblemData.category = cat;
+        document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
+        element.classList.add('selected');
+    }
+    
+    // Выбор сложности
+    window.selectSev = function(sev, element) {
+        newProblemData.severity = sev;
+        document.querySelectorAll('.sev-circle').forEach(c => c.classList.remove('selected'));
+        element.classList.add('selected');
+    }
+    
+    // Предпросмотр фото
+    window.previewPhoto = function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('photoPreview').style.display = 'block';
+                document.getElementById('uploadPlaceholder').style.display = 'none';
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    // --- ОТПРАВКА ДАННЫХ ---
+    
+    async function submitProblem() {
+        const title = document.getElementById('probTitle').value;
+        const desc = document.getElementById('probDesc').value;
+        const photoInput = document.getElementById('problemPhoto');
+        
+        if (!title) {
+            alert('Пожалуйста, введите название проблемы');
+            return;
+        }
+        
+        // Используем FormData для отправки файла
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('description', desc);
+        formData.append('lat', currentLatLng.lat);
+        formData.append('lng', currentLatLng.lng);
+        formData.append('category', newProblemData.category);
+        formData.append('severity', newProblemData.severity);
+        
+        if (photoInput.files[0]) {
+            formData.append('photo', photoInput.files[0]);
+        }
+        
+        try {
+            const response = await fetch('/api/problems/add', {
+                method: 'POST',
+                body: formData // Не указываем Content-Type, браузер сам поставит boundary
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                closeAllModals();
+                loadProblems(); // Перезагружаем карту
+                
+                // Визуальное обновление баллов (в реале это делает сервер)
+                const balanceEl = document.getElementById('currency-amount');
+                if(balanceEl) balanceEl.innerText = parseInt(balanceEl.innerText) + 15;
+                
+                alert('Проблема добавлена! Вы получили +15 ФМ');
+            } else {
+                alert('Ошибка: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Ошибка отправки:', error);
+            alert('Ошибка сети');
+        }
+    }
+    
+    // --- ПРОСМОТР И ДЕЙСТВИЯ ---
+    
+    function openViewModal(p) {
+        currentViewId = p.id;
+        document.getElementById('viewTitle').innerText = p.title;
+        document.getElementById('viewDesc').innerText = p.description || 'Нет описания';
+        
+        // Категория
+        const catMap = {'pollution':'Мусор', 'plants':'Растения', 'damage':'Поломка', 'other':'Другое'};
+        document.getElementById('viewCategoryBadge').innerText = catMap[p.category] || p.category;
+        
+        // Фото
+        const photoContainer = document.getElementById('viewPhotoContainer');
+        if (p.photo) {
+            photoContainer.innerHTML = `<img src="${p.photo}" style="width:100%; height:100%; object-fit:cover;">`;
+        } else {
+            photoContainer.innerHTML = `<i class="fas fa-image fa-4x" style="color:#ddd"></i>`;
+        }
+        
+        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById('viewModal').style.display = 'block';
+    }
+    
+    async function completeProblem() {
+        if (!confirm('Вы уверены, что выполнили эту задачу?')) return;
+        
+        try {
+            const res = await fetch(`/api/problems/${currentViewId}/complete`, { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.status === 'success') {
+                closeAllModals();
+                loadProblems();
+                
+                const balanceEl = document.getElementById('currency-amount');
+                if(balanceEl) balanceEl.innerText = parseInt(balanceEl.innerText) + data.reward;
+                
+                alert(`Отлично! Задача выполнена. Начислено +${data.reward} ФМ`);
+            }
+        } catch (e) { console.error(e); }
+    }
+    
+    function showComplaintForm() {
+        document.getElementById('viewModal').style.display = 'none';
+        document.getElementById('complaintModal').style.display = 'block';
+    }
+    
+    async function submitComplaint() {
+        const reason = document.getElementById('complaintReason').value;
+        const text = document.getElementById('complaintText').value;
+        
+        if(!reason) return alert('Выберите причину');
+        
+        try {
+            await fetch('/api/complaints/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    problem_id: currentViewId,
+                    reason: reason,
+                    description: text
+                })
+            });
+            
+            closeAllModals();
+            alert('Жалоба отправлена модераторам.');
+        } catch(e) { console.error(e); }
+    }
+
+    // Запуск карты после загрузки DOM
+    document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

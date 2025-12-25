@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+{% block title %}Профиль пользователя{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --primary-green: #1B4B43;
+        --bg-beige: #F2EFE4;
+        --accent-red: #E74C3C;
+        --accent-yellow: #F1C40F;
+        --accent-blue: #2980b9;
+        --accent-green: #27AE60;
+        --border-thick: 2px solid #1B4B43;
+        --radius-main: 12px;
+    }
+
+    /* Сетка страницы */
+    .profile-container {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 30px;
+        padding-bottom: 40px;
+    }
+    
+    /* --- САЙДБАР --- */
+    .profile-sidebar {
+        background: white;
+        border-radius: var(--radius-main);
+        padding: 30px;
+        border: var(--border-thick);
+        text-align: center;
+        height: fit-content;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .profile-avatar-wrapper {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 20px;
+    }
+    
+    .profile-avatar {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid var(--primary-green);
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .profile-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .profile-avatar i {
+        font-size: 3.5rem;
+        color: var(--primary-green);
+    }
+    
+    .avatar-edit-btn {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        background: var(--primary-green);
+        color: white;
+        border: 2px solid white;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .avatar-edit-btn:hover {
+        transform: scale(1.1);
+    }
+    
+    .profile-name {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--primary-green);
+        margin-bottom: 5px;
+        line-height: 1.2;
+    }
+    
+    .profile-email {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 25px;
+        word-break: break-all;
+    }
+    
+    /* Статистика в сайдбаре */
+    .profile-stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 25px;
+    }
+    
+    .stat-box {
+        background: var(--bg-beige);
+        border-radius: 8px;
+        padding: 10px;
+        border: 1px solid #ddd;
+    }
+    
+    .stat-val {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--primary-green);
+    }
+    
+    .stat-lbl {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #666;
+        font-weight: 700;
+    }
+    
+    /* Секция достижений */
+    .achievements-section {
+        border-top: 1px solid #eee;
+        padding-top: 20px;
+        text-align: left;
+    }
+    
+    .achievements-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--primary-green);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .badges-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .badge-item {
+        background: #fff;
+        border: 1px solid #ddd;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .badge-icon { color: var(--accent-yellow); }
+
+    /* --- ОСНОВНОЙ КОНТЕНТ --- */
+    .profile-main {
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+    }
+    
+    .content-section {
+        background: white;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        padding: 0;
+        overflow: hidden;
+    }
+    
+    .section-header {
+        background-color: #fff;
+        padding: 20px 25px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--primary-green);
+        margin: 0;
+    }
+    
+    /* Список активности */
+    .activity-list {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .activity-item {
+        display: flex;
+        align-items: center;
+        padding: 20px 25px;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s;
+        gap: 20px;
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    
+    .activity-item:hover {
+        background-color: #fcfcfc;
+    }
+    
+    /* Миниатюра фото */
+    .report-thumbnail {
+        width: 70px;
+        height: 70px;
+        border-radius: 8px;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border: 1px solid #ddd;
+        flex-shrink: 0;
+    }
+    
+    .report-thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .report-thumbnail i {
+        color: #ccc;
+        font-size: 1.5rem;
+    }
+    
+    /* Детали активности */
+    .activity-info {
+        flex: 1;
+    }
+    
+    .activity-title {
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: #333;
+        margin-bottom: 5px;
+    }
+    
+    .activity-meta {
+        font-size: 0.85rem;
+        color: #888;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+    
+    .meta-tag {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    /* Правая часть элемента (статус и баллы) */
+    .activity-status {
+        text-align: right;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+    
+    .st-reported { background: #ffebee; color: var(--accent-red); }
+    .st-in_progress { background: #FFF3E0; color: #E67E22; }
+    .st-completed { background: #e8f5e9; color: var(--accent-green); }
+    
+    .points-earned {
+        font-weight: 800;
+        color: var(--primary-green);
+        font-size: 0.95rem;
+    }
+    
+    /* Пустое состояние */
+    .empty-state {
+        text-align: center;
+        padding: 50px;
+        color: #999;
+    }
+    .empty-state i { font-size: 3rem; margin-bottom: 15px; opacity: 0.5; }
+
+    /* Адаптив */
+    @media (max-width: 768px) {
+        .profile-container { grid-template-columns: 1fr; }
+        .activity-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .activity-status { text-align: left; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+        .report-thumbnail { width: 100%; height: 150px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    
+    <!-- ЛЕВАЯ КОЛОНКА: САЙДБАР -->
+    <div class="profile-sidebar">
+        
+        <div class="profile-avatar-wrapper" onclick="document.getElementById('avatarUpload').click()">
+            <div class="profile-avatar" id="avatarContainer">
+                {% if current_user.avatar %}
+                    <img src="{{ current_user.avatar }}" alt="{{ current_user.username }}">
+                {% else %}
+                    <i class="fas fa-user"></i>
+                {% endif %}
+            </div>
+            <div class="avatar-edit-btn" title="Сменить фото">
+                <i class="fas fa-camera"></i>
+            </div>
+        </div>
+        
+        <!-- Скрытый инпут для загрузки аватара -->
+        <input type="file" id="avatarUpload" accept="image/*" style="display: none;" onchange="uploadAvatar(event)">
+        
+        <div class="profile-name">{{ current_user.username }}</div>
+        <div class="profile-email">{{ current_user.email }}</div>
+        
+        <div class="profile-stats-grid">
+            <div class="stat-box">
+                <div class="stat-val">{{ current_user.points }}</div>
+                <div class="stat-lbl">Баллов</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-val">{{ user_rank }}</div>
+                <div class="stat-lbl">Место</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-val">{{ current_user.total_reports }}</div>
+                <div class="stat-lbl">Заявок</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-val">{{ current_user.total_completed }}</div>
+                <div class="stat-lbl">Решено</div>
+            </div>
+        </div>
+        
+        <div class="achievements-section">
+            <div class="achievements-title">
+                <span>Достижения</span>
+                <span style="background: var(--primary-green); color: white; padding: 0 6px; border-radius: 10px; font-size: 0.7rem;">
+                    {{ current_user.get_badges()|length }}
+                </span>
+            </div>
+            
+            <div class="badges-list">
+                {% if current_user.get_badges() %}
+                    {% for badge in current_user.get_badges() %}
+                    <div class="badge-item">
+                        <i class="fas {{ badge.icon }} badge-icon"></i> {{ badge.name }}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="font-size: 0.8rem; color: #999; font-style: italic;">
+                        Пока нет наград. Активничайте на карте!
+                    </div>
+                {% endif %}
+                
+                <!-- Примеры заглушек для визуализации (можно убрать) -->
+                {% if not current_user.get_badges() %}
+                    <!-- Если пусто, ничего не показываем или показываем серые -->
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- ПРАВАЯ КОЛОНКА: КОНТЕНТ -->
+    <div class="profile-main">
+        
+        <!-- СЕКЦИЯ: МОИ ЗАЯВКИ -->
+        <div class="content-section">
+            <div class="section-header">
+                <i class="fas fa-history" style="color: var(--primary-green);"></i>
+                <h3 class="section-title">История заявок</h3>
+            </div>
+            
+            {% if my_reports %}
+            <div class="activity-list">
+                {% for report in my_reports %}
+                <div class="activity-item">
+                    <!-- Миниатюра (Фото или иконка) -->
+                    <div class="report-thumbnail">
+                        {% if report.photo %}
+                            <img src="{{ report.photo }}" alt="Фото проблемы">
+                        {% else %}
+                            <i class="fas fa-camera"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="activity-info">
+                        <div class="activity-title">{{ report.title }}</div>
+                        <div class="activity-meta">
+                            <div class="meta-tag">
+                                <i class="far fa-calendar-alt"></i> {{ report.created_at.strftime('%d.%m.%Y') }}
+                            </div>
+                            <div class="meta-tag">
+                                <i class="fas fa-tag"></i> {{ report.category }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-status">
+                        {% if report.status == 'completed' %}
+                            <span class="status-badge st-completed">Выполнено</span>
+                        {% elif report.status == 'in_progress' %}
+                            <span class="status-badge st-in_progress">В работе</span>
+                        {% else %}
+                            <span class="status-badge st-reported">Отправлено</span>
+                        {% endif %}
+                        <div class="points-earned">+15 🟡</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="far fa-map"></i>
+                <h4>Нет активных заявок</h4>
+                <p>Вы еще не сообщали о проблемах в городе.</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary" style="background:var(--primary-green); border:none; border-radius:20px; font-weight:700; margin-top:10px;">
+                    Сообщить о проблеме
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- СЕКЦИЯ: ВЫПОЛНЕННЫЕ ЗАДАНИЯ -->
+        <div class="content-section">
+            <div class="section-header">
+                <i class="fas fa-check-circle" style="color: var(--accent-green);"></i>
+                <h3 class="section-title">Выполненные задания</h3>
+            </div>
+            
+            {% if my_completed %}
+            <div class="activity-list">
+                {% for task in my_completed %}
+                <div class="activity-item">
+                    <div class="report-thumbnail" style="background: #e8f5e9; border-color: #c8e6c9;">
+                        <i class="fas fa-broom" style="color: var(--accent-green);"></i>
+                    </div>
+                    
+                    <div class="activity-info">
+                        <div class="activity-title">{{ task.title }}</div>
+                        <div class="activity-meta">
+                            <div class="meta-tag">
+                                <i class="fas fa-check"></i> Завершено: {{ task.completed_at.strftime('%d.%m.%Y') }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-status">
+                        <span class="status-badge st-completed">Успех</span>
+                        <div class="points-earned" style="color: var(--accent-green);">+{{ task.reward }} 🟡</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-tasks"></i>
+                <h4>Нет выполненных заданий</h4>
+                <p>Возьмите задачу на карте или в разделе "Задания", чтобы заработать баллы.</p>
+                <a href="{{ url_for('tasks') }}" class="btn btn-outline-success" style="border-radius:20px; font-weight:700; margin-top:10px;">
+                    Найти задание
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+    </div>
+</div>
+
+<script>
+    // Простая функция для предпросмотра аватара (в демо-режиме)
+    function uploadAvatar(event) {
+        const file = event.target.files[0];
+        if (file) {
+            // Проверка типа файла
+            if (!file.type.startsWith('image/')) {
+                alert('Пожалуйста, выберите изображение');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Обновляем картинку на клиенте
+                document.getElementById('avatarContainer').innerHTML = `<img src="${e.target.result}" alt="Avatar">`;
+                
+                // В реальном приложении здесь был бы fetch запрос на сервер
+                // const formData = new FormData();
+                // formData.append('avatar', file);
+                // fetch('/api/user/avatar', { method: 'POST', body: formData });
+                
+                alert('Фото профиля обновлено!');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+</script>
+{% endblock %}

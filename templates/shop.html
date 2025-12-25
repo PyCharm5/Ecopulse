@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+{% block title %}Магазин мерча{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --primary-green: #1B4B43;
+        --bg-beige: #F2EFE4;
+        --accent-red: #E74C3C;
+        --accent-yellow: #F1C40F;
+        --border-thick: 2px solid #1B4B43;
+        --radius-main: 12px;
+    }
+
+    /* Шапка магазина */
+    .shop-header {
+        background-color: var(--bg-beige);
+        padding: 30px;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        margin-bottom: 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        box-shadow: 0 4px 0 rgba(27, 75, 67, 0.1);
+    }
+    
+    .page-title {
+        font-weight: 800;
+        color: var(--primary-green);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        font-size: 2rem;
+    }
+
+    .balance-card {
+        background: white;
+        padding: 12px 25px;
+        border-radius: 30px;
+        border: 2px solid var(--primary-green);
+        font-weight: 800;
+        color: var(--primary-green);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+
+    /* Сетка товаров */
+    .shop-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 30px;
+        margin-top: 20px;
+    }
+    
+    /* Карточка товара */
+    .shop-item-card {
+        background: white;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .shop-item-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(27, 75, 67, 0.1);
+    }
+    
+    .item-image {
+        height: 240px;
+        background: #f8f8f8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ccc;
+        position: relative;
+        border-bottom: 2px solid #eee;
+        overflow: hidden;
+    }
+    
+    .item-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s;
+    }
+    
+    .shop-item-card:hover .item-image img {
+        transform: scale(1.05);
+    }
+    
+    .item-content {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    
+    .item-title {
+        font-weight: 800;
+        font-size: 1.2rem;
+        color: var(--primary-green);
+        margin-bottom: 10px;
+        line-height: 1.2;
+    }
+    
+    .item-description {
+        color: #666;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: 20px;
+        flex-grow: 1;
+    }
+    
+    .item-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    
+    .item-price {
+        color: var(--primary-green);
+        font-weight: 800;
+        font-size: 1.3rem;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .btn-buy {
+        background: var(--accent-red);
+        color: white;
+        border: none;
+        padding: 10px 25px;
+        border-radius: 25px;
+        font-weight: 700;
+        cursor: pointer;
+        font-size: 0.95rem;
+        transition: background 0.2s, transform 0.1s;
+        text-transform: uppercase;
+        box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3);
+    }
+    
+    .btn-buy:hover {
+        background: #c0392b;
+        transform: translateY(-2px);
+    }
+    
+    .btn-buy:active {
+        transform: scale(0.95);
+    }
+    
+    .btn-buy:disabled {
+        background: #e0e0e0;
+        color: #999;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* Модальное окно */
+    .purchase-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 2000;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+    
+    .modal-content-custom {
+        background: white;
+        border-radius: var(--radius-main);
+        padding: 30px;
+        width: 90%;
+        max-width: 500px;
+        border: var(--border-thick);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+        animation: slideIn 0.3s ease;
+        position: relative;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateY(30px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .modal-header-custom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #eee;
+    }
+    
+    .modal-title {
+        font-weight: 800;
+        color: var(--primary-green);
+        font-size: 1.4rem;
+        margin: 0;
+    }
+    
+    .close-modal {
+        background: none;
+        border: none;
+        font-size: 2rem;
+        cursor: pointer;
+        color: #999;
+        line-height: 1;
+        padding: 0;
+        transition: color 0.2s;
+    }
+    .close-modal:hover { color: var(--accent-red); }
+    
+    .modal-actions {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+    }
+    
+    .btn-confirm {
+        background: var(--primary-green);
+        color: white;
+        border: none;
+        padding: 14px 20px;
+        border-radius: 25px;
+        font-weight: 800;
+        cursor: pointer;
+        flex: 1;
+        text-transform: uppercase;
+        transition: background 0.2s;
+    }
+    .btn-confirm:hover { background: #143d36; }
+    
+    .btn-cancel {
+        background: #f0f0f0;
+        color: #333;
+        border: none;
+        padding: 14px 20px;
+        border-radius: 25px;
+        font-weight: 700;
+        cursor: pointer;
+        flex: 1;
+        text-transform: uppercase;
+        transition: background 0.2s;
+    }
+    .btn-cancel:hover { background: #e0e0e0; }
+
+    /* Форма заказа */
+    .order-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--primary-green);
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-family: inherit;
+        background: #fff;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary-green);
+    }
+    
+    /* Инфо о товаре в модальном окне */
+    .modal-item-info {
+        background: var(--bg-beige); 
+        padding: 15px 20px; 
+        border-radius: 8px; 
+        margin-bottom: 25px; 
+        color: var(--primary-green); 
+        font-size: 1rem;
+        border: 1px solid #ddd;
+    }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="shop-header">
+    <h1 class="page-title"><i class="fas fa-shopping-bag"></i> Магазин мерча</h1>
+    <div class="balance-card">
+        <i class="fas fa-coins" style="color: var(--accent-yellow);"></i>
+        Ваш баланс: &nbsp;<span id="user-balance">{{ current_user.points }}</span>
+    </div>
+</div>
+
+<div class="shop-grid">
+    {% for item in items %}
+    <div class="shop-item-card">
+        <div class="item-image">
+            <!-- onerror подменяет битую картинку на иконку -->
+            <img src="{{ item.image }}" alt="{{ item.name }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <div style="display:none; text-align:center;">
+                <i class="fas fa-gift fa-4x" style="color: #ddd;"></i>
+            </div>
+        </div>
+        
+        <div class="item-content">
+            <div class="item-title">{{ item.name }}</div>
+            <div class="item-description">
+                Экологичные материалы, фирменный стиль ФМ. Отличный выбор для волонтера.
+            </div>
+            
+            <div class="item-footer">
+                <div class="item-price">{{ item.price }} 🟡</div>
+                
+                {% if current_user.points >= item.price %}
+                    <button class="btn-buy" onclick="showPurchaseModal({{ item.id }}, '{{ item.name }}', {{ item.price }})">
+                        Купить
+                    </button>
+                {% else %}
+                    <button class="btn-buy" disabled title="Недостаточно баллов">
+                        Не хватает
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО ПОКУПКИ -->
+<div id="purchaseModal" class="purchase-modal" onclick="closeOnOverlay(event)">
+    <div class="modal-content-custom">
+        <div class="modal-header-custom">
+            <h3 class="modal-title">Оформление заказа</h3>
+            <button class="close-modal" onclick="hidePurchaseModal()">×</button>
+        </div>
+        
+        <div id="modalItemInfo" class="modal-item-info">
+            <!-- JS заполнит это -->
+        </div>
+        
+        <form class="order-form" id="orderForm">
+            <div class="form-group">
+                <label for="address">Адрес доставки</label>
+                <input type="text" id="address" class="form-control" placeholder="Город, улица, дом, офис" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">Телефон для связи</label>
+                <input type="tel" id="phone" class="form-control" placeholder="+7 (___) ___-__-__" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="size">Размер (для одежды)</label>
+                <select id="size" class="form-control">
+                    <option value="none">Не требуется</option>
+                    <option value="XS">XS (42-44)</option>
+                    <option value="S">S (44-46)</option>
+                    <option value="M">M (46-48)</option>
+                    <option value="L">L (48-50)</option>
+                    <option value="XL">XL (50-52)</option>
+                    <option value="XXL">XXL (52-54)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="comment">Комментарий</label>
+                <textarea id="comment" class="form-control" rows="2" placeholder="Код домофона, удобное время..."></textarea>
+            </div>
+        </form>
+        
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="hidePurchaseModal()">Отмена</button>
+            <button class="btn-confirm" onclick="confirmPurchase()">Оформить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentItem = null;
+    
+    function showPurchaseModal(itemId, itemName, itemPrice) {
+        currentItem = { id: itemId, name: itemName, price: itemPrice };
+        const balance = parseInt(document.getElementById('user-balance').innerText);
+        
+        const modalInfo = document.getElementById('modalItemInfo');
+        modalInfo.innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-weight:700;">
+                <span>Товар:</span> <span style="color:#333;">${itemName}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <span>Стоимость:</span> <span style="font-weight:800;">${itemPrice} 🟡</span>
+            </div>
+            <div style="border-top:1px solid #ddd; margin:8px 0;"></div>
+            <div style="display:flex; justify-content:space-between; color: ${balance < itemPrice ? '#E74C3C' : '#1B4B43'}">
+                <span>Останется баллов:</span> <strong>${balance - itemPrice} 🟡</strong>
+            </div>
+        `;
+        
+        document.getElementById('purchaseModal').style.display = 'flex';
+    }
+    
+    function hidePurchaseModal() {
+        document.getElementById('purchaseModal').style.display = 'none';
+        document.getElementById('orderForm').reset();
+        currentItem = null;
+    }
+    
+    function closeOnOverlay(event) {
+        if (event.target === document.getElementById('purchaseModal')) {
+            hidePurchaseModal();
+        }
+    }
+    
+    async function confirmPurchase() {
+        if (!currentItem) return;
+        
+        const address = document.getElementById('address').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const size = document.getElementById('size').value;
+        const comment = document.getElementById('comment').value;
+        
+        if (!address || !phone) {
+            alert('Пожалуйста, заполните адрес доставки и телефон');
+            return;
+        }
+        
+        const balanceElem = document.getElementById('user-balance');
+        let currentBalance = parseInt(balanceElem.innerText);
+        
+        if (currentBalance < currentItem.price) {
+            alert('Ошибка: Недостаточно средств для покупки');
+            return;
+        }
+        
+        // 1. Списание баллов (визуально)
+        currentBalance -= currentItem.price;
+        balanceElem.innerText = currentBalance;
+        
+        // 2. Отправка на сервер (симуляция)
+        try {
+            await fetch('/api/user/update_balance', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ amount: -currentItem.price })
+            });
+            
+            // Здесь можно было бы отправить детали заказа на другой эндпоинт
+            
+            alert(`Заказ успешно оформлен!\nТовар: ${currentItem.name}\nСписано: ${currentItem.price} ФМ\n\nМенеджер свяжется с вами по номеру ${phone}.`);
+            hidePurchaseModal();
+            
+            // Обновляем состояние кнопок (если баланс стал слишком мал)
+            updateButtonsState(currentBalance);
+            
+        } catch (error) {
+            console.error('Ошибка покупки:', error);
+            alert('Произошла ошибка при обработке заказа. Попробуйте позже.');
+            // Возврат баланса при ошибке
+            balanceElem.innerText = currentBalance + currentItem.price; 
+        }
+    }
+    
+    function updateButtonsState(balance) {
+        const buttons = document.querySelectorAll('.btn-buy');
+        buttons.forEach(btn => {
+            // Находим цену в карточке (парсим из текста "150 🟡")
+            const priceText = btn.parentElement.querySelector('.item-price').innerText;
+            const price = parseInt(priceText);
+            
+            if (balance < price) {
+                btn.disabled = true;
+                btn.innerText = "Не хватает";
+                btn.title = "Недостаточно баллов";
+            }
+        });
+    }
+</script>
+{% endblock %}

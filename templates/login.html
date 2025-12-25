@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Вход - Профкоманды ФМ{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Центрирование формы на странице */
+    .login-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 140px); /* Вычет высоты шапки */
+        padding: 40px 20px;
+    }
+
+    .login-card {
+        background: white;
+        width: 100%;
+        max-width: 420px;
+        padding: 40px;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        box-shadow: 0 15px 40px rgba(27, 75, 67, 0.1);
+        position: relative;
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .login-header h2 {
+        font-weight: 800;
+        color: var(--primary-green);
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .login-header p {
+        color: #666;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    /* Стили полей ввода */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--primary-green);
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+
+    .form-control-custom {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.2s, background-color 0.2s;
+        background-color: #f9f9f9;
+    }
+
+    .form-control-custom:focus {
+        outline: none;
+        border-color: var(--primary-green);
+        background-color: white;
+    }
+
+    /* Кнопка входа */
+    .btn-login {
+        width: 100%;
+        padding: 14px;
+        background: var(--accent-red);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        font-weight: 800;
+        text-transform: uppercase;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: transform 0.1s, background-color 0.2s;
+        margin-top: 10px;
+    }
+
+    .btn-login:hover {
+        background-color: #c0392b;
+    }
+
+    .btn-login:active {
+        transform: scale(0.98);
+    }
+
+    /* Ссылки */
+    .auth-links {
+        text-align: center;
+        margin-top: 25px;
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .auth-links a {
+        color: var(--primary-green);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .auth-links a:hover {
+        text-decoration: underline;
+    }
+
+    /* Блок с тестовыми данными */
+    .test-accounts {
+        margin-top: 30px;
+        background: var(--bg-beige);
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px dashed var(--primary-green);
+        font-size: 0.85rem;
+        color: #444;
+    }
+
+    .test-accounts-title {
+        font-weight: 700;
+        color: var(--primary-green);
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .account-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <h2>Вход</h2>
+            <p>Добро пожаловать в Профкоманды</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="form-group">
+                <label class="form-label" for="username">Имя пользователя</label>
+                <input type="text" id="username" name="username" class="form-control-custom" placeholder="Введите логин" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Пароль</label>
+                <input type="password" id="password" name="password" class="form-control-custom" placeholder="Введите пароль" required>
+            </div>
+
+            <button type="submit" class="btn-login">
+                Войти в систему
+            </button>
+        </form>
+
+        <div class="auth-links">
+            Нет аккаунта? <a href="{{ url_for('register') }}">Зарегистрироваться</a>
+        </div>
+
+        <!-- Подсказка для проверки (можно убрать в продакшене) -->
+        <div class="test-accounts">
+            <div class="test-accounts-title">
+                <i class="fas fa-key"></i> Тестовый доступ:
+            </div>
+            <div class="account-row">
+                <span>Админ:</span>
+                <strong>admin / admin123</strong>
+            </div>
+            <div class="account-row">
+                <span>Юзер:</span>
+                <strong>user1 / user123</strong>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

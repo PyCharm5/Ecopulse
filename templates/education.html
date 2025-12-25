@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% block title %}Обучение и Материалы{% endblock %}
+{% block extra_css %}
+<style>
+    :root {
+        --primary-green: #1B4B43;
+        --bg-beige: #F2EFE4;
+        --accent-red: #E74C3C;
+        --accent-yellow: #F1C40F;
+        --accent-blue: #2980b9;
+        --border-thick: 2px solid #1B4B43;
+        --radius-main: 12px;
+    }
+
+    /* Заголовок */
+    .edu-header {
+        background-color: var(--bg-beige);
+        padding: 30px;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        margin-bottom: 30px;
+        color: var(--primary-green);
+        text-align: center;
+        box-shadow: 0 4px 0 rgba(27, 75, 67, 0.1);
+    }
+    
+    .edu-header h1 {
+        font-weight: 800;
+        margin-bottom: 10px;
+        font-size: 2rem;
+    }
+    
+    .edu-header p {
+        font-weight: 500;
+        font-size: 1.1rem;
+        opacity: 0.9;
+    }
+
+    /* Карточки контента */
+    .content-card {
+        background: white;
+        border-radius: var(--radius-main);
+        border: var(--border-thick);
+        margin-bottom: 25px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+
+    .card-header-custom {
+        padding: 15px 20px;
+        background: #fff;
+        border-bottom: 1px solid #eee;
+        font-weight: 700;
+        color: var(--primary-green);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.1rem;
+    }
+
+    .card-body-custom {
+        padding: 20px;
+    }
+
+    /* Видео контейнер (адаптивный) */
+    .video-wrapper {
+        position: relative;
+        padding-bottom: 56.25%; /* 16:9 */
+        height: 0;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .video-wrapper iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Список материалов */
+    .material-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+        padding: 15px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        background: white;
+        border-left: 4px solid var(--primary-green);
+    }
+    
+    .material-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+    
+    .material-icon {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background: var(--bg-beige);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary-green);
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+    
+    /* Типы материалов */
+    .type-pdf { border-left-color: var(--accent-red); }
+    .type-video { border-left-color: var(--accent-blue); }
+    .type-article { border-left-color: var(--accent-yellow); }
+
+    .material-content h5 {
+        margin: 0 0 5px 0;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #333;
+    }
+    
+    .material-content p {
+        margin: 0 0 10px 0;
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    .btn-sm-custom {
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-block;
+        border: 1px solid currentColor;
+        transition: all 0.2s;
+    }
+    
+    .btn-pdf { color: var(--accent-red); }
+    .btn-pdf:hover { background: var(--accent-red); color: white; }
+    
+    .btn-article { color: var(--primary-green); }
+    .btn-article:hover { background: var(--primary-green); color: white; }
+
+    /* Квиз */
+    .quiz-question {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: #333;
+    }
+    
+    .quiz-option {
+        padding: 12px 15px;
+        border: 2px solid #eee;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 600;
+        color: #555;
+    }
+    
+    .quiz-option:hover {
+        background: #fafafa;
+        border-color: #ccc;
+    }
+    
+    .quiz-option.selected {
+        background: var(--bg-beige);
+        border-color: var(--primary-green);
+        color: var(--primary-green);
+    }
+    
+    .quiz-option.correct {
+        background: #d4edda;
+        border-color: #28a745;
+        color: #155724;
+    }
+    
+    .quiz-option.wrong {
+        background: #f8d7da;
+        border-color: #dc3545;
+        color: #721c24;
+    }
+    
+    .btn-quiz {
+        width: 100%;
+        background: var(--primary-green);
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 25px;
+        font-weight: 700;
+        margin-top: 15px;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+    
+    /* Блок сертификата */
+    .cert-block {
+        background: white;
+        border: 2px dashed var(--accent-yellow);
+        border-radius: var(--radius-main);
+        padding: 30px;
+        text-align: center;
+        margin-top: 30px;
+    }
+    
+    .cert-icon {
+        font-size: 3rem;
+        color: var(--accent-yellow);
+        margin-bottom: 15px;
+    }
+    
+    .progress-container {
+        height: 10px;
+        background: #eee;
+        border-radius: 10px;
+        margin: 15px 0;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: var(--primary-green);
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="edu-header">
+    <h1><i class="fas fa-graduation-cap"></i> База знаний ФМ</h1>
+    <p>Изучайте материалы, проходите тесты и становитесь сертифицированным эковолонтером</p>
+</div>
+
+<div class="row">
+    <!-- ЛЕВАЯ КОЛОНКА (Видео и инфографика) -->
+    <div class="col-md-8">
+        
+        <!-- Видео-урок -->
+        <div class="content-card">
+            <div class="card-header-custom">
+                <i class="fas fa-play-circle"></i> Видео-урок недели
+            </div>
+            <div class="card-body-custom">
+                <div class="video-wrapper">
+                    <!-- Заглушка видео (в реальности ID видео с YouTube) -->
+                    <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ?controls=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                </div>
+                <h3 style="font-weight: 800; color: var(--primary-green); margin-bottom: 10px;">Как правильно ухаживать за городскими деревьями?</h3>
+                <p style="color: #666; line-height: 1.6;">
+                    В этом уроке мы разберем основные ошибки при поливе и обрезке саженцев в городской среде. 
+                    Вы узнаете, как отличить больное дерево от здорового и какие инструменты лучше использовать.
+                </p>
+                <div style="margin-top: 15px;">
+                    <span class="badge bg-secondary">#Экология</span>
+                    <span class="badge bg-secondary">#ГородскаяСреда</span>
+                    <span class="badge bg-secondary">#Волонтерство</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Инфографика (Заглушка) -->
+        <div class="content-card">
+            <div class="card-header-custom">
+                <i class="fas fa-chart-pie"></i> Полезная инфографика
+            </div>
+            <div class="card-body-custom text-center">
+                <div style="background: #f8f9fa; border: 2px dashed #ddd; border-radius: 8px; padding: 40px; color: #999;">
+                    <i class="fas fa-image fa-3x mb-3"></i>
+                    <h5>Схема раздельного сбора мусора</h5>
+                    <p>Здесь будет размещена инфографика</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Сертификат -->
+        <div class="cert-block">
+            <i class="fas fa-certificate cert-icon"></i>
+            <h3 style="color: var(--primary-green); font-weight: 800;">Сертификат волонтера</h3>
+            <p>Пройдите все тесты, чтобы получить официальный электронный сертификат от Фонда Мельниченко.</p>
+            
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; margin-bottom: 5px;">
+                        <span>Прогресс обучения</span>
+                        <span>65%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-fill" style="width: 65%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary mt-3" style="border-radius: 20px; font-weight: 700;" disabled>
+                <i class="fas fa-lock"></i> Скачать сертификат
+            </button>
+            <div style="font-size: 0.8rem; color: #999; margin-top: 5px;">Доступно после прохождения курса</div>
+        </div>
+        
+    </div>
+    
+    <!-- ПРАВАЯ КОЛОНКА (Материалы и Квиз) -->
+    <div class="col-md-4">
+        
+        <!-- Библиотека -->
+        <div class="content-card">
+            <div class="card-header-custom">
+                <i class="fas fa-book"></i> Материалы
+            </div>
+            <div class="card-body-custom" style="padding: 15px;">
+                
+                <div class="material-item type-pdf">
+                    <div class="material-icon"><i class="fas fa-file-pdf"></i></div>
+                    <div class="material-content">
+                        <h5>Памятка волонтера</h5>
+                        <p>PDF, 2.4 MB</p>
+                        <a href="#" class="btn-sm-custom btn-pdf">Скачать</a>
+                    </div>
+                </div>
+                
+                <div class="material-item type-article">
+                    <div class="material-icon"><i class="fas fa-newspaper"></i></div>
+                    <div class="material-content">
+                        <h5>Эко-привычки</h5>
+                        <p>Статья, 5 мин</p>
+                        <a href="#" class="btn-sm-custom btn-article">Читать</a>
+                    </div>
+                </div>
+                
+                <div class="material-item type-video">
+                    <div class="material-icon"><i class="fas fa-video"></i></div>
+                    <div class="material-content">
+                        <h5>История фонда</h5>
+                        <p>Видео, 12 мин</p>
+                        <a href="#" class="btn-sm-custom btn-article">Смотреть</a>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- Квиз -->
+        <div class="content-card">
+            <div class="card-header-custom" style="background: var(--bg-beige);">
+                <i class="fas fa-question-circle"></i> Блиц-тест
+            </div>
+            <div class="card-body-custom">
+                <div id="quiz-container">
+                    <div class="quiz-question">Сколько литров воды нужно взрослому дереву в засушливую погоду?</div>
+                    
+                    <div class="quiz-option" onclick="selectOption(this, false)">5-10 литров</div>
+                    <div class="quiz-option" onclick="selectOption(this, true)">20-30 литров</div>
+                    <div class="quiz-option" onclick="selectOption(this, false)">50-100 литров</div>
+                    
+                    <button class="btn-quiz" onclick="checkAnswer()">Проверить</button>
+                    
+                    <div id="quiz-result" style="margin-top: 15px; text-align: center; font-weight: 700; display: none;"></div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+    let selectedElement = null;
+    let isCorrect = false;
+    let answered = false;
+
+    function selectOption(el, correct) {
+        if(answered) return;
+        
+        // Сброс выбора
+        document.querySelectorAll('.quiz-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        el.classList.add('selected');
+        selectedElement = el;
+        isCorrect = correct;
+    }
+
+    function checkAnswer() {
+        if(!selectedElement || answered) return;
+        
+        answered = true;
+        const resultDiv = document.getElementById('quiz-result');
+        
+        if(isCorrect) {
+            selectedElement.classList.add('correct');
+            resultDiv.innerHTML = '<span style="color: #27AE60;"><i class="fas fa-check-circle"></i> Верно! +10 баллов</span>';
+            
+            // Начисляем баллы (демо)
+            fetch('/api/user/update_balance', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ amount: 10 })
+            }).then(() => {
+                // Обновляем счетчик в шапке
+                const bal = document.getElementById('currency-amount');
+                if(bal) bal.innerText = parseInt(bal.innerText) + 10;
+            });
+            
+        } else {
+            selectedElement.classList.add('wrong');
+            // Показываем правильный
+            document.querySelectorAll('.quiz-option')[1].classList.add('correct');
+            resultDiv.innerHTML = '<span style="color: #E74C3C;"><i class="fas fa-times-circle"></i> Ошибка. Попробуйте позже.</span>';
+        }
+        
+        resultDiv.style.display = 'block';
+        document.querySelector('.btn-quiz').disabled = true;
+        document.querySelector('.btn-quiz').style.opacity = '0.5';
+    }
+</script>
+{% endblock %}
