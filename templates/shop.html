@@ -438,53 +438,63 @@
     }
     
     async function confirmPurchase() {
-        if (!currentItem) return;
-        
-        const address = document.getElementById('address').value.trim();
-        const phone = document.getElementById('phone').value.trim();
-        const size = document.getElementById('size').value;
-        const comment = document.getElementById('comment').value;
-        
-        if (!address || !phone) {
-            alert('Пожалуйста, заполните адрес доставки и телефон');
-            return;
-        }
-        
-        const balanceElem = document.getElementById('user-balance');
-        let currentBalance = parseInt(balanceElem.innerText);
-        
-        if (currentBalance < currentItem.price) {
-            alert('Ошибка: Недостаточно средств для покупки');
-            return;
-        }
-        
-        // 1. Списание баллов (визуально)
-        currentBalance -= currentItem.price;
-        balanceElem.innerText = currentBalance;
-        
-        // 2. Отправка на сервер (симуляция)
-        try {
-            await fetch('/api/user/update_balance', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ amount: -currentItem.price })
-            });
-            
-            // Здесь можно было бы отправить детали заказа на другой эндпоинт
-            
-            alert(`Заказ успешно оформлен!\nТовар: ${currentItem.name}\nСписано: ${currentItem.price} ФМ\n\nМенеджер свяжется с вами по номеру ${phone}.`);
-            hidePurchaseModal();
-            
-            // Обновляем состояние кнопок (если баланс стал слишком мал)
-            updateButtonsState(currentBalance);
-            
-        } catch (error) {
-            console.error('Ошибка покупки:', error);
-            alert('Произошла ошибка при обработке заказа. Попробуйте позже.');
-            // Возврат баланса при ошибке
-            balanceElem.innerText = currentBalance + currentItem.price; 
-        }
-    }
+		if (!currentItem) return;
+		
+		const address = document.getElementById('address').value.trim();
+		const phone = document.getElementById('phone').value.trim();
+		const size = document.getElementById('size').value;
+		const comment = document.getElementById('comment').value;
+		
+		if (!address || !phone) {
+			showNotification('error', 'Ошибка', 'Заполните адрес и телефон');
+			return;
+		}
+		
+		const balanceElem = document.getElementById('user-balance');
+		let currentBalance = parseInt(balanceElem.innerText);
+		
+		if (currentBalance < currentItem.price) {
+			showNotification('error', 'Ошибка', 'Недостаточно средств');
+			return;
+		}
+		
+		// Создаем заказ
+		try {
+			const response = await fetch('/api/orders/create', {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({
+					item_id: currentItem.id,
+					item_name: currentItem.name,
+					price: currentItem.price,
+					quantity: 1,
+					address: address,
+					phone: phone,
+					size: size,
+					comment: comment
+				})
+			});
+			
+			const result = await response.json();
+			
+			if (result.status === 'success') {
+				// Обновляем баланс
+				currentBalance -= currentItem.price;
+				balanceElem.innerText = currentBalance;
+				
+				showNotification('success', 'Успех', `Заказ #${result.order_id} оформлен!`);
+				hidePurchaseModal();
+				
+				// Обновляем состояние кнопок
+				updateButtonsState(currentBalance);
+			} else {
+				showNotification('error', 'Ошибка', result.message);
+			}
+			
+		} catch (error) {
+			showNotification('error', 'Ошибка', 'Ошибка соединения');
+		}
+	}
     
     function updateButtonsState(balance) {
         const buttons = document.querySelectorAll('.btn-buy');
