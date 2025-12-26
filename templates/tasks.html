@@ -240,13 +240,13 @@
                 </div>
                 
                 <div class="task-actions">
-                    <button class="btn-action btn-take" onclick="takeTask({{ task.id }})">
-                        Взять в работу
-                    </button>
-                    <button class="btn-action btn-report" onclick="reportTask({{ task.id }})" title="Пожаловаться">
-                        <i class="fas fa-flag"></i>
-                    </button>
-                </div>
+					<button class="btn-action btn-complete" onclick="completeTaskWithPhotos({{ task.id }})">
+						<i class="fas fa-check"></i> Завершить с фото
+					</button>
+					<button class="btn-action btn-cancel" onclick="cancelTask({{ task.id }})">
+						<i class="fas fa-times"></i> Отменить
+					</button>
+				</div>
             </div>
             {% endfor %}
         {% else %}
@@ -359,5 +359,31 @@
             alert('В демо-режиме отмена не реализована. Обратитесь к администратору.');
         }
     }
+	
+	// Функция отмены задания
+	async function cancelTask(taskId) {
+		if(!confirm('Вы уверены, что хотите отменить это задание?')) return;
+		
+		try {
+			const response = await fetch(`/api/problems/${taskId}/cancel`, { method: 'POST' });
+			const result = await response.json();
+			
+			if (result.status === 'success') {
+				showNotification('success', 'Успех', 'Задание отменено');
+				setTimeout(() => location.reload(), 1000);
+			} else {
+				showNotification('error', 'Ошибка', result.message);
+			}
+		} catch (error) {
+			showNotification('error', 'Ошибка', 'Ошибка соединения');
+		}
+	}
+
+	// Функция завершения с фото
+	function completeTaskWithPhotos(taskId) {
+		// Здесь будет модальное окно для загрузки фото
+		// Пока используем старую функцию
+		completeTask(taskId);
+	}
 </script>
 {% endblock %}
