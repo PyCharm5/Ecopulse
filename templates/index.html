@@ -290,6 +290,9 @@
         .form-section { padding: 15px; }
         .category-grid { grid-template-columns: repeat(2, 1fr); }
     }
+	
+	.btn-like.active { color: #27AE60 !important; }
+	.btn-dislike.active { color: #E74C3C !important; }
 </style>
 {% endblock %}
 
@@ -383,6 +386,15 @@
             <p id="viewDesc" style="color: #555; line-height: 1.6; flex: 1; overflow-y: auto;">
                 Описание проблемы...
             </p>
+			
+			<div style="margin: 15px 0; display: flex; gap: 15px; align-items: center;" id="voteSection">
+				<button class="btn-like" onclick="voteProblem('like')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
+					<i class="fas fa-thumbs-up"></i> <span id="likeCount">0</span>
+				</button>
+				<button class="btn-dislike" onclick="voteProblem('dislike')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
+					<i class="fas fa-thumbs-down"></i> <span id="dislikeCount">0</span>
+				</button>
+			</div>
             
             <div class="modal-footer">
                 <button style="background: white; border: 2px solid var(--primary-green); color: var(--primary-green); padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer;" onclick="showComplaintForm()">
@@ -686,5 +698,75 @@
 
     // Запуск карты после загрузки DOM
     document.addEventListener('DOMContentLoaded', initMap);
+	
+	
+	let currentProblemId = null;
+	let userVote = null;
+
+	// При открытии модального окна
+	async function openViewModal(p) {
+		currentProblemId = p.id;
+		currentViewId = p.id;
+		
+		// Загружаем статус голосования
+		try {
+			const response = await fetch(`/api/problems/${p.id}/vote_status`);
+			const data = await response.json();
+			
+			document.getElementById('likeCount').textContent = data.likes || 0;
+			document.getElementById('dislikeCount').textContent = data.dislikes || 0;
+			
+			userVote = data.user_vote;
+			updateVoteButtons();
+		} catch (e) {
+			console.error('Error loading vote status:', e);
+		}
+		
+		// Остальной код...
+	}
+
+	function updateVoteButtons() {
+		const likeBtn = document.querySelector('.btn-like');
+		const dislikeBtn = document.querySelector('.btn-dislike');
+		
+		likeBtn.classList.remove('active');
+		dislikeBtn.classList.remove('active');
+		
+		if (userVote === 'like') {
+			likeBtn.classList.add('active');
+		} else if (userVote === 'dislike') {
+			dislikeBtn.classList.add('active');
+		}
+	}
+
+	async function voteProblem(type) {
+		if (!currentProblemId) return;
+		
+		try {
+			const response = await fetch(`/api/problems/${currentProblemId}/vote`, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({ type: type })
+			});
+			
+			const data = await response.json();
+			
+			if (data.status === 'success') {
+				// Обновляем счетчики
+				document.getElementById('likeCount').textContent = data.likes;
+				document.getElementById('dislikeCount').textContent = data.dislikes;
+				
+				// Обновляем состояние кнопок
+				if (userVote === type) {
+					userVote = null; // Отмена голоса
+				} else {
+					userVote = type; // Новый голос
+				}
+				updateVoteButtons();
+			}
+		} catch (e) {
+			console.error('Error voting:', e);
+		}
+	}
 </script>
 {% endblock %}
