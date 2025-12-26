@@ -356,32 +356,49 @@
         </div>
         
         <div class="achievements-section">
-            <div class="achievements-title">
-                <span>Достижения</span>
-                <span style="background: var(--primary-green); color: white; padding: 0 6px; border-radius: 10px; font-size: 0.7rem;">
-                    {{ current_user.get_badges()|length }}
-                </span>
-            </div>
-            
-            <div class="badges-list">
-                {% if current_user.get_badges() %}
-                    {% for badge in current_user.get_badges() %}
-                    <div class="badge-item">
-                        <i class="fas {{ badge.icon }} badge-icon"></i> {{ badge.name }}
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <div style="font-size: 0.8rem; color: #999; font-style: italic;">
-                        Пока нет наград. Активничайте на карте!
-                    </div>
-                {% endif %}
-                
-                <!-- Примеры заглушек для визуализации (можно убрать) -->
-                {% if not current_user.get_badges() %}
-                    <!-- Если пусто, ничего не показываем или показываем серые -->
-                {% endif %}
-            </div>
-        </div>
+			<div class="achievements-title">
+				<span>Достижения</span>
+				<span style="background: var(--primary-green); color: white; padding: 0 6px; border-radius: 10px; font-size: 0.7rem;">
+					{{ current_user.get_badges()|length }}
+				</span>
+			</div>
+			
+			<div class="badges-list">
+				{% if current_user.get_badges() %}
+					{% for badge in current_user.get_badges() %}
+					<div class="badge-item" title="{{ badge.name }} - получено {{ badge.earned_at[:10] }}">
+						<i class="fas {{ badge.icon }} badge-icon"></i> 
+						<span>{{ badge.name }}</span>
+					</div>
+					{% endfor %}
+				{% else %}
+					<div style="font-size: 0.8rem; color: #999; font-style: italic;">
+						Пока нет наград. Проявите активность!
+					</div>
+				{% endif %}
+			</div>
+			
+			<!-- Прогресс до следующих достижений -->
+			<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+				<div style="font-size: 0.75rem; font-weight: 700; color: #666; margin-bottom: 8px;">
+					До следующих достижений:
+				</div>
+				<div style="font-size: 0.8rem; color: #555;">
+					<div style="margin-bottom: 5px;">
+						<i class="fas fa-flag" style="color: #ccc; width: 20px;"></i>
+						10 проблем: {{ current_user.total_reports }}/10
+					</div>
+					<div style="margin-bottom: 5px;">
+						<i class="fas fa-check-circle" style="color: #ccc; width: 20px;"></i>
+						5 решений: {{ current_user.total_completed }}/5
+					</div>
+					<div>
+						<i class="fas fa-coins" style="color: #ccc; width: 20px;"></i>
+						500 баллов: {{ current_user.points }}/500
+					</div>
+				</div>
+			</div>
+		</div>
     </div>
     
     <!-- ПРАВАЯ КОЛОНКА: КОНТЕНТ -->
