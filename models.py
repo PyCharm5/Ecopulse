@@ -27,6 +27,11 @@ class User(db.Model, UserMixin):
     city = db.Column(db.String(100), default='Киселевск')
     language = db.Column(db.String(10), default='ru')
     
+    # Реферальная система
+    referral_code = db.Column(db.String(20), unique=True)
+    referred_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    referral_points = db.Column(db.Integer, default=0)
+    
     # Счетчики активности (для аналитики)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     total_reports = db.Column(db.Integer, default=0)
@@ -68,6 +73,39 @@ class User(db.Model, UserMixin):
         except:
             return []
 
+    def check_achievements(self):
+        """Проверка и начисление достижений"""
+        achievements = []
+        
+        # Проверяем достижения (без заказов, чтобы избежать циклического импорта)
+        if self.total_reports >= 1 and not self.has_achievement('Первая проблема'):
+            self.add_badge('Первая проблема', 'fa-map-marker-alt')
+            achievements.append('Первая проблема')
+        
+        if self.total_reports >= 10 and not self.has_achievement('10 проблем'):
+            self.add_badge('10 проблем', 'fa-flag')
+            achievements.append('10 проблем')
+        
+        if self.total_completed >= 5 and not self.has_achievement('5 решений'):
+            self.add_badge('5 решений', 'fa-check-circle')
+            achievements.append('5 решений')
+        
+        if self.points >= 500 and not self.has_achievement('Богатый волонтер'):
+            self.add_badge('Богатый волонтер', 'fa-coins')
+            achievements.append('Богатый волонтер')
+        
+        if self.experience >= 1000 and not self.has_achievement('Опытный волонтер'):
+            self.add_badge('Опытный волонтер', 'fa-star')
+            achievements.append('Опытный волонтер')
+        
+        # Проверка заказов будет выполняться отдельно при создании заказа
+        return achievements
+
+    def has_achievement(self, name):
+        """Проверить, есть ли достижение"""
+        badges = self.get_badges()
+        return any(b.get('name') == name for b in badges)
+
 class Problem(db.Model):
     """Модель проблемы/заявки на карте"""
     id = db.Column(db.Integer, primary_key=True)
@@ -87,19 +125,34 @@ class Problem(db.Model):
     status = db.Column(db.String(20), default='reported') # reported, in_progress, completed, rejected
     reward = db.Column(db.Integer, default=15)           # Награда за выполнение
     
+    # Голосование
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
+    
     # Связи с пользователями
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id')) # Кто взял в работу
     
     # Метаданные
-    likes = db.Column(db.Integer, default=0)
-    dislikes = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
     
     # Отношения (для удобного доступа через ORM)
     user = db.relationship('User', foreign_keys=[user_id], backref='reported_problems')
     worker = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_problems')
+    comments = db.relationship('Comment', backref='problem_comment', cascade='all,delete')
+    task_completion = db.relationship('TaskCompletion', backref='problem_report', uselist=False, cascade='all,delete')
+
+class Comment(db.Model):
+    """Модель комментария к проблеме"""
+    id = db.Column(db.Integer, primary_key=True)
+    problem_id = db.Column(db.Integer, db.ForeignKey('problem.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    user = db.relationship('User', backref='user_comments')
 
 class Complaint(db.Model):
     """Модель жалобы на контент"""
@@ -112,8 +165,68 @@ class Complaint(db.Model):
     status = db.Column(db.String(20), default='pending') # pending, resolved, rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    problem = db.relationship('Problem')
-    user = db.relationship('User')
+    problem = db.relationship('Problem', backref='complaints')
+    user = db.relationship('User', backref='user_complaints')
+
+class TaskCompletion(db.Model):
+    """Модель фотоотчета о выполнении задания"""
+    id = db.Column(db.Integer, primary_key=True)
+    problem_id = db.Column(db.Integer, db.ForeignKey('problem.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    
+    # Фото "Было" и "Стало"
+    before_photo = db.Column(db.String(500))
+    after_photo = db.Column(db.String(500))
+    
+    # Описание проделанной работы
+    description = db.Column(db.Text)
+    
+    # Рейтинг выполнения (от администратора или других пользователей)
+    rating = db.Column(db.Integer, default=0)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Отношения
+    user = db.relationship('User', backref='task_completions')
+    # проблема уже связана через problem_report
+
+class Order(db.Model):
+    """Модель заказа из магазина"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    item_id = db.Column(db.Integer)  # ID товара из магазина
+    item_name = db.Column(db.String(200))
+    price = db.Column(db.Integer)
+    quantity = db.Column(db.Integer, default=1)
+    
+    # Данные доставки
+    address = db.Column(db.Text)
+    phone = db.Column(db.String(20))
+    size = db.Column(db.String(10))
+    comment = db.Column(db.Text)
+    
+    # Статус заказа
+    status = db.Column(db.String(20), default='pending')  # pending, processing, shipped, delivered, cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    
+    # Отношения
+    user = db.relationship('User', backref='user_orders')
+
+class Vote(db.Model):
+    """Модель голосования (лайки/дизлайки)"""
+    id = db.Column(db.Integer, primary_key=True)
+    problem_id = db.Column(db.Integer, db.ForeignKey('problem.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    vote_type = db.Column(db.String(10))  # 'like' или 'dislike'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Уникальный индекс для предотвращения множественных голосов
+    __table_args__ = (db.UniqueConstraint('problem_id', 'user_id', name='unique_vote'),)
+    
+    # Отношения
+    user = db.relationship('User', backref='user_votes')
+    problem = db.relationship('Problem', backref='problem_votes')
 
 # --- Дополнительные модели (задел на будущее) ---
 
