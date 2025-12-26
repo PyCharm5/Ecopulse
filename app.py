@@ -5,10 +5,11 @@ from datetime import datetime
 import os
 import requests
 import random
+import secrets
 
 # Импорт конфигурации и моделей
 from config import Config
-from models import db, User, Problem, Complaint
+from models import db, User, Problem, Complaint, Comment, TaskCompletion, Order, Vote, SensorData
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -131,6 +132,25 @@ def tasks():
     
     return render_template('tasks.html', tasks=available_tasks, my_tasks=my_tasks)
 
+@app.route('/completed_tasks')
+@login_required
+def completed_tasks():
+    """Страница выполненных заданий с фотоотчетами"""
+    # Все завершенные проблемы с отчетами
+    completed = Problem.query.filter_by(status='completed').all()
+    
+    # Собираем отчеты
+    reports = []
+    for problem in completed:
+        report = TaskCompletion.query.filter_by(problem_id=problem.id).first()
+        reports.append({
+            'problem': problem,
+            'report': report,
+            'user': problem.worker if problem.assigned_to else None
+        })
+    
+    return render_template('completed_tasks.html', reports=reports)
+
 @app.route('/rating')
 @login_required
 def rating():
@@ -230,6 +250,18 @@ def register():
         user = User(username=username, email=email)
         user.set_password(password)
         
+        # Генерируем реферальный код
+        user.referral_code = secrets.token_urlsafe(8)[:10]
+        
+        # Проверяем реферальный код из формы
+        ref_code = request.form.get('ref_code')
+        if ref_code:
+            referrer = User.query.filter_by(referral_code=ref_code).first()
+            if referrer:
+                user.referred_by = referrer.id
+                referrer.referral_points += 50  # Награда за приглашение
+                referrer.points += 50
+        
         db.session.add(user)
         db.session.commit()
         
@@ -266,7 +298,9 @@ def get_problems_api():
             'severity': p.severity,
             'reward': p.reward,
             'status': p.status,
-            'photo': p.photo # URL фото
+            'photo': p.photo, # URL фото
+            'likes': p.likes,
+            'dislikes': p.dislikes
         })
     return jsonify(result)
 
@@ -307,6 +341,9 @@ def add_problem():
         current_user.total_reports += 1
         current_user.experience += 30
         
+        # Проверяем достижения
+        achievements = current_user.check_achievements()
+        
         db.session.add(problem)
         db.session.commit()
         
@@ -329,6 +366,24 @@ def take_problem(problem_id):
     db.session.commit()
     return jsonify({'status': 'success'})
 
+@app.route('/api/problems/<int:problem_id>/cancel', methods=['POST'])
+@login_required
+def cancel_problem(problem_id):
+    """Отменить взятое задание"""
+    problem = Problem.query.get_or_404(problem_id)
+    
+    if problem.assigned_to != current_user.id:
+        return jsonify({'status': 'error', 'message': 'Вы не выполняете это задание'}), 403
+    
+    if problem.status != 'in_progress':
+        return jsonify({'status': 'error', 'message': 'Задание не в работе'})
+    
+    problem.assigned_to = None
+    problem.status = 'reported'
+    db.session.commit()
+    
+    return jsonify({'status': 'success'})
+
 @app.route('/api/problems/<int:problem_id>/complete', methods=['POST'])
 @login_required
 def complete_problem(problem_id):
@@ -337,8 +392,7 @@ def complete_problem(problem_id):
     
     # Проверка прав (либо автор, либо исполнитель, либо админ)
     if not (current_user.id == problem.assigned_to or current_user.is_admin):
-        # В некоторых механиках автор тоже может закрыть
-        pass 
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
 
     if problem.status == 'completed':
         return jsonify({'status': 'error', 'message': 'Уже выполнено'})
@@ -351,8 +405,143 @@ def complete_problem(problem_id):
     current_user.total_completed += 1
     current_user.experience += 50
     
+    # Проверяем достижения
+    current_user.check_achievements()
+    
     db.session.commit()
     return jsonify({'status': 'success', 'reward': problem.reward})
+
+@app.route('/api/problems/<int:problem_id>/complete_with_photos', methods=['POST'])
+@login_required
+def complete_problem_with_photos():
+    """Завершить задание с фотоотчетом"""
+    try:
+        problem_id = request.form.get('problem_id')
+        problem = Problem.query.get_or_404(problem_id)
+        
+        if problem.assigned_to != current_user.id:
+            return jsonify({'status': 'error', 'message': 'Вы не выполняете это задание'}), 403
+        
+        # Сохраняем фото "было" и "стало"
+        before_path = None
+        after_path = None
+        
+        if 'before_photo' in request.files:
+            file = request.files['before_photo']
+            if file and file.filename != '':
+                filename = secure_filename(f"before_{datetime.now().timestamp()}_{file.filename}")
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                before_path = f"/static/uploads/{filename}"
+        
+        if 'after_photo' in request.files:
+            file = request.files['after_photo']
+            if file and file.filename != '':
+                filename = secure_filename(f"after_{datetime.now().timestamp()}_{file.filename}")
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                after_path = f"/static/uploads/{filename}"
+        
+        # Создаем отчет о выполнении
+        completion = TaskCompletion(
+            problem_id=problem_id,
+            user_id=current_user.id,
+            before_photo=before_path,
+            after_photo=after_path,
+            description=request.form.get('description', '')
+        )
+        
+        # Обновляем статус проблемы
+        problem.status = 'completed'
+        problem.completed_at = datetime.utcnow()
+        
+        # Начисляем награду
+        current_user.points += problem.reward
+        current_user.total_completed += 1
+        current_user.experience += 50
+        
+        # Проверяем достижения
+        current_user.check_achievements()
+        
+        db.session.add(completion)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'reward': problem.reward})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/problems/<int:problem_id>/vote', methods=['POST'])
+@login_required
+def vote_problem(problem_id):
+    """Проголосовать за проблему"""
+    data = request.json
+    vote_type = data.get('type')  # 'like' или 'dislike'
+    
+    if vote_type not in ['like', 'dislike']:
+        return jsonify({'status': 'error', 'message': 'Неверный тип голоса'}), 400
+    
+    # Проверяем, не голосовал ли уже пользователь
+    existing_vote = Vote.query.filter_by(
+        problem_id=problem_id,
+        user_id=current_user.id
+    ).first()
+    
+    problem = Problem.query.get_or_404(problem_id)
+    
+    if existing_vote:
+        # Если повторный голос того же типа - удаляем
+        if existing_vote.vote_type == vote_type:
+            db.session.delete(existing_vote)
+            if vote_type == 'like':
+                problem.likes -= 1
+            else:
+                problem.dislikes -= 1
+        else:
+            # Если меняем голос - обновляем
+            if existing_vote.vote_type == 'like':
+                problem.likes -= 1
+                problem.dislikes += 1
+            else:
+                problem.dislikes -= 1
+                problem.likes += 1
+            existing_vote.vote_type = vote_type
+    else:
+        # Новый голос
+        vote = Vote(
+            problem_id=problem_id,
+            user_id=current_user.id,
+            vote_type=vote_type
+        )
+        db.session.add(vote)
+        
+        if vote_type == 'like':
+            problem.likes += 1
+        else:
+            problem.dislikes += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        'status': 'success',
+        'likes': problem.likes,
+        'dislikes': problem.dislikes
+    })
+
+@app.route('/api/problems/<int:problem_id>/vote_status')
+@login_required
+def get_vote_status(problem_id):
+    """Получить статус голосования пользователя"""
+    vote = Vote.query.filter_by(
+        problem_id=problem_id,
+        user_id=current_user.id
+    ).first()
+    
+    problem = Problem.query.get_or_404(problem_id)
+    
+    return jsonify({
+        'user_vote': vote.vote_type if vote else None,
+        'likes': problem.likes,
+        'dislikes': problem.dislikes
+    })
 
 @app.route('/api/problems/<int:problem_id>/delete', methods=['POST'])
 @login_required
@@ -363,12 +552,42 @@ def delete_problem(problem_id):
         
     problem = Problem.query.get_or_404(problem_id)
     
-    # Удаляем связанные жалобы, если есть (каскадное удаление лучше настроить в БД, но сделаем вручную)
+    # Удаляем связанные жалобы, если есть
     Complaint.query.filter_by(problem_id=problem.id).delete()
+    Comment.query.filter_by(problem_id=problem.id).delete()
+    Vote.query.filter_by(problem_id=problem.id).delete()
+    TaskCompletion.query.filter_by(problem_id=problem.id).delete()
     
     db.session.delete(problem)
     db.session.commit()
     return jsonify({'status': 'success'})
+
+@app.route('/api/comments/add', methods=['POST'])
+@login_required
+def add_comment():
+    """Добавить комментарий"""
+    data = request.json
+    comment = Comment(
+        problem_id=data.get('problem_id'),
+        user_id=current_user.id,
+        text=data.get('text')
+    )
+    db.session.add(comment)
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/comments/<int:problem_id>', methods=['GET'])
+@login_required
+def get_comments(problem_id):
+    """Получить комментарии к проблеме"""
+    comments = Comment.query.filter_by(problem_id=problem_id).order_by(Comment.created_at.asc()).all()
+    return jsonify([{
+        'id': c.id,
+        'user': c.user.username,
+        'text': c.text,
+        'created_at': c.created_at.isoformat(),
+        'avatar': c.user.avatar
+    } for c in comments])
 
 @app.route('/api/complaints/add', methods=['POST'])
 @login_required
@@ -422,6 +641,116 @@ def toggle_admin(user_id):
     db.session.commit()
     return jsonify({'status': 'success', 'is_admin': user.is_admin})
 
+@app.route('/api/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    """Удалить пользователя (Админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    
+    if user.id == current_user.id:
+        return jsonify({'status': 'error', 'message': 'Нельзя удалить себя'}), 400
+    
+    # Удаляем связанные данные
+    Problem.query.filter_by(user_id=user.id).delete()
+    Complaint.query.filter_by(user_id=user.id).delete()
+    Comment.query.filter_by(user_id=user.id).delete()
+    Vote.query.filter_by(user_id=user.id).delete()
+    TaskCompletion.query.filter_by(user_id=user.id).delete()
+    Order.query.filter_by(user_id=user.id).delete()
+    
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify({'status': 'success'})
+
+@app.route('/api/user/<int:user_id>/reset_password', methods=['POST'])
+@login_required
+def reset_user_password(user_id):
+    """Сбросить пароль пользователя (Админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    new_password = 'temp123'  # Временный пароль
+    
+    user.set_password(new_password)
+    db.session.commit()
+    
+    return jsonify({'status': 'success', 'password': new_password})
+
+@app.route('/api/user/<int:user_id>/edit', methods=['POST'])
+@login_required
+def edit_user(user_id):
+    """Редактировать пользователя (Админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    data = request.json
+    
+    if 'points' in data:
+        user.points = data['points']
+    if 'is_worker' in data:
+        user.is_worker = data['is_worker']
+    if 'city' in data:
+        user.city = data['city']
+    
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/problems/<int:problem_id>/edit', methods=['POST'])
+@login_required
+def edit_problem(problem_id):
+    """Редактировать проблему (Админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    problem = Problem.query.get_or_404(problem_id)
+    data = request.json
+    
+    if 'title' in data:
+        problem.title = data['title']
+    if 'description' in data:
+        problem.description = data['description']
+    if 'severity' in data:
+        problem.severity = data['severity']
+    if 'reward' in data:
+        problem.reward = data['reward']
+    if 'status' in data:
+        problem.status = data['status']
+    
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/tasks/create', methods=['POST'])
+@login_required
+def create_task():
+    """Создать задачу вручную (Админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    data = request.json
+    
+    task = Problem(
+        lat=data.get('lat', app.config['CITY_CENTER'][0]),
+        lng=data.get('lng', app.config['CITY_CENTER'][1]),
+        title=data['title'],
+        description=data.get('description', ''),
+        category=data.get('category', 'other'),
+        severity=data.get('severity', 3),
+        reward=data.get('reward', 15),
+        user_id=current_user.id,
+        status='reported'
+    )
+    
+    db.session.add(task)
+    db.session.commit()
+    
+    return jsonify({'status': 'success', 'id': task.id})
+
 @app.route('/api/user/update_balance', methods=['POST'])
 @login_required
 def update_balance():
@@ -431,6 +760,118 @@ def update_balance():
     current_user.points += amount
     db.session.commit()
     return jsonify({'status': 'success'})
+
+@app.route('/api/orders', methods=['GET'])
+@login_required
+def get_orders():
+    """Получить заказы (только для админа)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    orders_data = []
+    
+    for order in orders:
+        orders_data.append({
+            'id': order.id,
+            'user': order.user.username,
+            'item': order.item_name,
+            'price': order.price,
+            'quantity': order.quantity,
+            'address': order.address,
+            'phone': order.phone,
+            'size': order.size,
+            'status': order.status,
+            'created_at': order.created_at.strftime('%d.%m.%Y %H:%M'),
+            'total': order.price * order.quantity
+        })
+    
+    return jsonify(orders_data)
+
+@app.route('/api/orders/create', methods=['POST'])
+@login_required
+def create_order():
+    """Создать заказ"""
+    try:
+        data = request.json
+        
+        # Проверяем баланс
+        item_price = data.get('price', 0)
+        if current_user.points < item_price:
+            return jsonify({'status': 'error', 'message': 'Недостаточно средств'}), 400
+        
+        # Создаем заказ
+        order = Order(
+            user_id=current_user.id,
+            item_id=data.get('item_id'),
+            item_name=data.get('item_name'),
+            price=item_price,
+            quantity=data.get('quantity', 1),
+            address=data.get('address'),
+            phone=data.get('phone'),
+            size=data.get('size', ''),
+            comment=data.get('comment', '')
+        )
+        
+        # Списание баллов
+        current_user.points -= item_price
+        
+        # Проверяем достижения для заказа
+        orders_count = Order.query.filter_by(user_id=current_user.id).count()
+        if orders_count == 0:  # Если это первый заказ (перед добавлением нового заказа)
+            current_user.add_badge('Первый заказ', 'fa-shopping-bag')
+        
+        # Проверяем другие достижения
+        current_user.check_achievements()
+        
+        db.session.add(order)
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'order_id': order.id})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/orders/<int:order_id>/update_status', methods=['POST'])
+@login_required
+def update_order_status(order_id):
+    """Обновить статус заказа (админ)"""
+    if not current_user.is_admin:
+        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    
+    order = Order.query.get_or_404(order_id)
+    order.status = request.json.get('status', order.status)
+    order.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/daily_challenge')
+@login_required
+def get_daily_challenge():
+    """Получить текущий ежедневный челлендж"""
+    today = datetime.utcnow().date()
+    today_problems = Problem.query.filter(
+        Problem.user_id == current_user.id,
+        db.func.date(Problem.created_at) == today
+    ).count()
+    
+    challenges = [
+        {'id': 1, 'name': 'Первая проблема', 'target': 1, 'reward': 10},
+        {'id': 2, 'name': 'Три проблемы за день', 'target': 3, 'reward': 30},
+        {'id': 3, 'name': 'Помочь с 5 заданиями', 'target': 5, 'reward': 50},
+    ]
+    
+    completed = []
+    for challenge in challenges:
+        if today_problems >= challenge['target']:
+            completed.append(challenge['id'])
+    
+    return jsonify({
+        'challenges': challenges,
+        'completed': completed,
+        'today_problems': today_problems
+    })
 
 # ==========================================
 # ИНТЕГРАЦИЯ ДАТЧИКОВ (OpenWeatherMap)
@@ -536,6 +977,7 @@ def init_db():
                 city='Киселевск'
             )
             admin.set_password('admin123')
+            admin.referral_code = secrets.token_urlsafe(8)[:10]
             db.session.add(admin)
             
         # Создаем тестового пользователя
@@ -548,6 +990,7 @@ def init_db():
                 city='Киселевск'
             )
             user.set_password('user123')
+            user.referral_code = secrets.token_urlsafe(8)[:10]
             db.session.add(user)
             
         # Добавляем тестовую проблему
@@ -564,8 +1007,9 @@ def init_db():
             db.session.add(p1)
             
         db.session.commit()
-        print("База данных готова.")
+        print("База данных готова. Все таблицы созданы.")
 
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, port=5000)
+    #app.run(debug=True, port=5000, host='0.0.0.0')
