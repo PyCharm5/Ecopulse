@@ -254,9 +254,9 @@
     </div>
     
     <div class="stat-card-admin">
-        <i class="fas fa-map-marker-alt fa-2x"></i>
+        <i class="fas fa-coins fa-2x"></i>
         <div class="stat-number-admin">{{ total_points }}</div>
-        <p>Всего точек</p>
+        <p>Всего ФМ в системе</p>
     </div>
     
     <div class="stat-card-admin">
@@ -275,7 +275,7 @@
 <!-- Состояние системы -->
 <div class="system-health">
     <h5 style="font-weight: bold; color: var(--primary-green); margin-bottom: 20px;">
-        <i class="fas fa-heartbeat"></i> Состояние системы
+        <i class="fas fa-heartbeat"></i> Статистика системы
     </h5>
     <div class="row">
         <div class="col-md-3">
@@ -283,28 +283,34 @@
             <div class="health-indicator">
                 <div class="health-bar health-good" style="width: 100%;"></div>
             </div>
-            <small>100% доступно</small>
+            <small>{{ total_points + total_users + total_tasks }} записей</small>
         </div>
         <div class="col-md-3">
-            <p style="font-weight: bold; margin-bottom: 5px;">API Погоды</p>
+            <p style="font-weight: bold; margin-bottom: 5px;">Активность</p>
             <div class="health-indicator">
-                <div class="health-bar health-good" style="width: 98%;"></div>
+                <div class="health-bar {% if new_points_today > 10 %}health-good{% elif new_points_today > 3 %}health-warning{% else %}health-critical{% endif %}" 
+                     style="width: {% if new_points_today > 10 %}100{% elif new_points_today > 5 %}70{% elif new_points_today > 0 %}40{% else %}10{% endif %}%;">
+                </div>
             </div>
-            <small>98% аптайм</small>
+            <small>{{ new_points_today }} новых сегодня</small>
+        </div>
+        <div class="col-md-3">
+            <p style="font-weight: bold; margin-bottom: 5px;">Завершено</p>
+            {% set completed = problems|selectattr('status', 'equalto', 'completed')|list|length %}
+            {% set completion_rate = (completed / problems|length * 100) if problems|length > 0 else 0 %}
+            <div class="health-indicator">
+                <div class="health-bar {% if completion_rate > 50 %}health-good{% elif completion_rate > 20 %}health-warning{% else %}health-critical{% endif %}" 
+                     style="width: {{ completion_rate|int }}%;">
+                </div>
+            </div>
+            <small>{{ completion_rate|int }}% выполнено</small>
         </div>
         <div class="col-md-3">
             <p style="font-weight: bold; margin-bottom: 5px;">Сервер</p>
             <div class="health-indicator">
-                <div class="health-bar health-warning" style="width: 85%;"></div>
+                <div class="health-bar health-good" style="width: 95%;"></div>
             </div>
-            <small>Нагрузка 15%</small>
-        </div>
-        <div class="col-md-3">
-            <p style="font-weight: bold; margin-bottom: 5px;">Датчики</p>
-            <div class="health-indicator">
-                <div class="health-bar health-good" style="width: 90%;"></div>
-            </div>
-            <small>90% онлайн</small>
+            <small>Работает {{ (now - problems[-1].created_at).days if problems else 0 }} дней</small>
         </div>
     </div>
 </div>
@@ -324,6 +330,11 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button">
             <i class="fas fa-tasks"></i> Задачи
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="orders-tab" data-bs-toggle="tab" data-bs-target="#orders" type="button">
+            <i class="fas fa-shopping-cart"></i> Заказы
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -494,6 +505,38 @@
         </div>
     </div>
     
+    <!-- ORDERS TAB -->
+    <div class="tab-pane fade" id="orders" role="tabpanel">
+        <div class="export-buttons">
+            <button class="btn btn-success" onclick="loadOrders()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Пользователь</th>
+                        <th>Товар</th>
+                        <th>Цена</th>
+                        <th>Кол-во</th>
+                        <th>Итого</th>
+                        <th>Адрес</th>
+                        <th>Телефон</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    <tr><td colspan="11" class="text-center">Нажмите "Обновить" для загрузки заказов</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
     <!-- SENSORS TAB -->
     <div class="tab-pane fade" id="sensors" role="tabpanel">
         <div class="export-buttons">
@@ -585,6 +628,11 @@
         
         // Обновляем данные каждую минуту
         setInterval(loadSensorsData, 60000);
+        
+        // Загружаем заказы при переходе на вкладку
+        document.getElementById('orders-tab').addEventListener('shown.bs.tab', function() {
+            loadOrders();
+        });
     });
     
     function initCharts() {
@@ -727,19 +775,247 @@
         chart.update();
     }
     
-    function refreshSensors() {
+    // Функции для работы с заказами
+    async function loadOrders() {
+        try {
+            const response = await fetch('/api/orders');
+            const orders = await response.json();
+            updateOrdersTable(orders);
+        } catch (e) {
+            console.error('Ошибка загрузки заказов:', e);
+            document.getElementById('ordersTableBody').innerHTML = 
+                '<tr><td colspan="11" class="text-center text-danger">Ошибка загрузки заказов</td></tr>';
+        }
+    }
+    
+    function updateOrdersTable(orders) {
+        const tbody = document.getElementById('ordersTableBody');
+        tbody.innerHTML = '';
+        
+        if (orders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center">Нет заказов</td></tr>';
+            return;
+        }
+        
+        orders.forEach(order => {
+            const statusColors = {
+                'pending': 'warning',
+                'processing': 'info',
+                'shipped': 'primary',
+                'delivered': 'success',
+                'cancelled': 'danger'
+            };
+            
+            const statusText = {
+                'pending': 'Ожидает',
+                'processing': 'В обработке',
+                'shipped': 'Отправлен',
+                'delivered': 'Доставлен',
+                'cancelled': 'Отменен'
+            };
+            
+            const statusBadge = `<span class="badge bg-${statusColors[order.status] || 'secondary'}">${statusText[order.status] || order.status}</span>`;
+            
+            tbody.innerHTML += `
+                <tr id="order-row-${order.id}">
+                    <td>#${order.id}</td>
+                    <td>${order.user}</td>
+                    <td>${order.item}</td>
+                    <td>${order.price} 🟡</td>
+                    <td>${order.quantity}</td>
+                    <td><strong>${order.total} 🟡</strong></td>
+                    <td>
+                        <div style="max-width: 200px; font-size: 0.85rem;">
+                            ${order.address ? order.address.substring(0, 50) + (order.address.length > 50 ? '...' : '') : '—'}
+                        </div>
+                    </td>
+                    <td>${order.phone || '—'}</td>
+                    <td>${statusBadge}</td>
+                    <td>${order.created_at}</td>
+                    <td class="user-actions">
+                        <button class="btn btn-sm btn-info" onclick="updateOrderStatus(${order.id}, 'processing')" title="В обработку">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="updateOrderStatus(${order.id}, 'delivered')" title="Доставлено">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled')" title="Отменить">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    
+    async function updateOrderStatus(orderId, status) {
+        if (!confirm(`Изменить статус заказа #${orderId} на "${status}"?`)) return;
+        
+        try {
+            const response = await fetch(`/api/orders/${orderId}/update_status`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status: status })
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                showNotification('success', 'Успех', `Статус заказа #${orderId} обновлен`);
+                loadOrders(); // Перезагружаем список
+            } else {
+                showNotification('error', 'Ошибка', result.message);
+            }
+        } catch (e) {
+            showNotification('error', 'Ошибка', 'Ошибка обновления статуса');
+        }
+    }
+    
+    async function refreshSensors() {
         loadSensorsData();
-        alert('Данные обновлены');
+        showNotification('info', 'Информация', 'Данные сенсоров обновлены');
+    }
+    
+    // Реальные функции для админки
+    async function editUser(id) {
+        const points = prompt('Новое количество баллов:');
+        if (points !== null) {
+            try {
+                const response = await fetch(`/api/user/${id}/edit`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ points: parseInt(points) })
+                });
+                
+                if (response.ok) {
+                    showNotification('success', 'Успех', 'Пользователь обновлен');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            } catch (e) {
+                showNotification('error', 'Ошибка', 'Ошибка обновления');
+            }
+        }
+    }
+    
+    async function deleteUser(id) {
+        if(!confirm('Удалить пользователя и все его данные?')) return;
+        
+        try {
+            const response = await fetch(`/api/user/${id}/delete`, { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showNotification('success', 'Успех', 'Пользователь удален');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('error', 'Ошибка', data.message);
+            }
+        } catch (e) {
+            showNotification('error', 'Ошибка', 'Ошибка удаления');
+        }
+    }
+    
+    async function resetPassword(id) {
+        if(!confirm('Сбросить пароль пользователя?')) return;
+        
+        try {
+            const response = await fetch(`/api/user/${id}/reset_password`, { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showNotification('success', 'Успех', `Новый пароль: ${data.password}`);
+            }
+        } catch (e) {
+            showNotification('error', 'Ошибка', 'Ошибка сброса');
+        }
+    }
+    
+    async function deletePoint(id) {
+        if(!confirm('Удалить эту точку?')) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${id}/delete`, { method: 'POST' });
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                showNotification('success', 'Успех', 'Точка удалена');
+                setTimeout(() => location.reload(), 1000);
+            }
+        } catch (e) {
+            showNotification('error', 'Ошибка', 'Ошибка удаления');
+        }
+    }
+    
+    async function editPoint(id) {
+        const title = prompt('Новое название:');
+        const reward = prompt('Новая награда:');
+        
+        if (title !== null && reward !== null) {
+            try {
+                const response = await fetch(`/api/problems/${id}/edit`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        title: title,
+                        reward: parseInt(reward)
+                    })
+                });
+                
+                if (response.ok) {
+                    showNotification('success', 'Успех', 'Точка обновлена');
+                    setTimeout(() => location.reload(), 1000);
+            }
+            } catch (e) {
+                showNotification('error', 'Ошибка', 'Ошибка обновления');
+            }
+        }
+    }
+    
+    function createTask() {
+        const title = prompt('Название задачи:');
+        const description = prompt('Описание задачи:');
+        const reward = prompt('Награда (баллы):');
+        
+        if (title && description && reward) {
+            fetch('/api/tasks/create', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    title: title,
+                    description: description,
+                    reward: parseInt(reward),
+                    category: 'other',
+                    severity: 3
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showNotification('success', 'Успех', 'Задача создана');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            })
+            .catch(e => showNotification('error', 'Ошибка', 'Ошибка создания'));
+        }
     }
     
     // Заглушки функций
-    function editUser(id) { alert('Редактирование пользователя ' + id); }
-    function deleteUser(id) { if(confirm('Удалить пользователя?')) alert('Пользователь удален'); }
-    function resetPassword(id) { alert('Пароль сброшен'); }
-    function deletePoint(id) { if(confirm('Удалить точку?')) alert('Точка удалена'); }
-    function editPoint(id) { alert('Редактирование точки ' + id); }
-    function createTask() { alert('Создание задачи'); }
-    function calibrateSensors() { alert('Калибровка запущена...'); }
-    function exportData(type, format) { alert('Экспорт ' + type + ' в формате ' + format); }
+    function calibrateSensors() { 
+        showNotification('info', 'Информация', 'Калибровка сенсоров запущена...');
+    }
+    function exportData(type, format) { 
+        showNotification('info', 'Информация', `Экспорт ${type} в формате ${format} (заглушка)`);
+    }
+    
+    // Функция для уведомлений (должна быть подключена в base.html)
+    function showNotification(type, title, message) {
+        // Если функция существует в base.html, используем её
+        if (typeof window.showAlert === 'function') {
+            window.showAlert(type, title, message);
+        } else {
+            // Запасной вариант
+            alert(`${title}: ${message}`);
+        }
+    }
 </script>
 {% endblock %}
