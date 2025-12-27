@@ -242,12 +242,12 @@
     .sev-circle:hover { opacity: 0.7; transform: scale(1.1); }
     .sev-circle.selected { opacity: 1; transform: scale(1.1); box-shadow: 0 0 0 2px #333; }
     
-	.bg-min { background: #4CAF50; }
+    .bg-min { background: #4CAF50; }
     .bg-green { background: #27AE60; }
     .bg-yellow { background: #F1C40F; }
     .bg-orange { background: #e67e22; }
     .bg-red { background: #E74C3C; }
-	.bg-max { background: #DC3522; }
+    .bg-max { background: #DC3522; }
     
     /* Кнопки действий */
     .modal-footer {
@@ -290,9 +290,9 @@
         .form-section { padding: 15px; }
         .category-grid { grid-template-columns: repeat(2, 1fr); }
     }
-	
-	.btn-like.active { color: #27AE60 !important; }
-	.btn-dislike.active { color: #E74C3C !important; }
+    
+    .btn-like.active { color: #27AE60 !important; }
+    .btn-dislike.active { color: #E74C3C !important; }
 </style>
 {% endblock %}
 
@@ -344,11 +344,11 @@
                 <span class="severity-label">ВАЖНОСТЬ</span>
                 <div class="sev-circles">
                     <div class="sev-circle bg-min" onclick="selectSev(1, this)">1</div>
-					<div class="sev-circle bg-green" onclick="selectSev(2, this)">2</div>
+                    <div class="sev-circle bg-green" onclick="selectSev(2, this)">2</div>
                     <div class="sev-circle bg-yellow selected" onclick="selectSev(3, this)">3</div>
                     <div class="sev-circle bg-orange" onclick="selectSev(4, this)">4</div>
                     <div class="sev-circle bg-red" onclick="selectSev(5, this)">5</div>
-					<div class="sev-circle bg-max" onclick="selectSev(6, this)">6</div>
+                    <div class="sev-circle bg-max" onclick="selectSev(6, this)">6</div>
                 </div>
             </div>
             
@@ -369,7 +369,9 @@
     <div class="modal-layout">
         <div class="photo-section" id="viewPhotoContainer">
             <!-- Сюда JS вставит фото или заглушку -->
-            <i class="fas fa-image fa-4x" style="color: #ddd;"></i>
+            <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#f5f5f5; border-radius:8px;">
+                <i class="fas fa-image fa-4x" style="color:#ddd;"></i>
+            </div>
         </div>
         
         <div class="form-section">
@@ -386,15 +388,15 @@
             <p id="viewDesc" style="color: #555; line-height: 1.6; flex: 1; overflow-y: auto;">
                 Описание проблемы...
             </p>
-			
-			<div style="margin: 15px 0; display: flex; gap: 15px; align-items: center;" id="voteSection">
-				<button class="btn-like" onclick="voteProblem('like')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
-					<i class="fas fa-thumbs-up"></i> <span id="likeCount">0</span>
-				</button>
-				<button class="btn-dislike" onclick="voteProblem('dislike')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
-					<i class="fas fa-thumbs-down"></i> <span id="dislikeCount">0</span>
-				</button>
-			</div>
+            
+            <div style="margin: 15px 0; display: flex; gap: 15px; align-items: center;" id="voteSection">
+                <button class="btn-like" onclick="voteProblem('like')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
+                    <i class="fas fa-thumbs-up"></i> <span id="likeCount">0</span>
+                </button>
+                <button class="btn-dislike" onclick="voteProblem('dislike')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #ccc;">
+                    <i class="fas fa-thumbs-down"></i> <span id="dislikeCount">0</span>
+                </button>
+            </div>
             
             <div class="modal-footer">
                 <button style="background: white; border: 2px solid var(--primary-green); color: var(--primary-green); padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer;" onclick="showComplaintForm()">
@@ -442,6 +444,8 @@
     };
     
     let currentViewId = null; // ID просматриваемой проблемы
+    let currentProblemId = null; // Для голосования
+    let userVote = null;
 
     // Инициализация карты
     function initMap() {
@@ -472,6 +476,8 @@
             const response = await fetch('/api/problems');
             const problems = await response.json();
             
+            console.log('Загружено проблем:', problems.length);
+            
             // Очищаем старые маркеры
             for (let id in markers) {
                 map.removeLayer(markers[id]);
@@ -491,16 +497,14 @@
     // Добавление маркера на карту
     function addMarkerToMap(p) {
         const iconMap = {
-            'pollution': '🚯', 'plants': '🌿', 'water': '💧', 
-            'damage': '🔨', 'animals': '🐕', 'other': '⚠️'
+            'pollution': '🚯', 
+            'plants': '🌿', 
+            'water': '💧', 
+            'damage': '🔨', 
+            'animals': '🐕', 
+            'other': '⚠️'
         };
         
-		
-		
-		
-		
-		
-		
         const emoji = iconMap[p.category] || '⚠️';
         
         const customIcon = L.divIcon({
@@ -516,7 +520,13 @@
         });
         
         const marker = L.marker([p.lat, p.lng], {icon: customIcon}).addTo(map);
-        marker.on('click', () => openViewModal(p));
+        
+        // Ключевое исправление: передаем функцию openViewModal в замыкание
+        marker.on('click', function() {
+            console.log('Клик по маркеру проблемы:', p.id, p.title);
+            openViewModal(p);
+        });
+        
         markers[p.id] = marker;
     }
     
@@ -537,7 +547,7 @@
         document.querySelector('.cat-btn:first-child').classList.add('selected'); // Выбор 'other'
         
         document.querySelectorAll('.sev-circle').forEach(c => c.classList.remove('selected'));
-        document.querySelectorAll('.sev-circle')[1].classList.add('selected'); // Выбор 3
+        document.querySelectorAll('.sev-circle')[2].classList.add('selected'); // Выбор 3
         
         document.getElementById('modalOverlay').style.display = 'block';
         document.getElementById('addModal').style.display = 'block';
@@ -629,28 +639,88 @@
     
     // --- ПРОСМОТР И ДЕЙСТВИЯ ---
     
-    function openViewModal(p) {
+    // ОБЯЗАТЕЛЬНО ОБЪЯВЛЯЕМ КАК ГЛОБАЛЬНУЮ ФУНКЦИЮ
+    window.openViewModal = function(p) {
+        console.log('Открытие модального окна для проблемы:', p.id);
+        
+        currentProblemId = p.id;
         currentViewId = p.id;
+        
         document.getElementById('viewTitle').innerText = p.title;
         document.getElementById('viewDesc').innerText = p.description || 'Нет описания';
         
         // Категория
-        const catMap = {'pollution':'Мусор', 'plants':'Растения', 'damage':'Поломка', 'other':'Другое'};
+        const catMap = {
+            'pollution': 'Мусор', 
+            'plants': 'Растения', 
+            'damage': 'Поломка', 
+            'water': 'Вода',
+            'animals': 'Животные',
+            'other': 'Другое'
+        };
         document.getElementById('viewCategoryBadge').innerText = catMap[p.category] || p.category;
+        
+        // Важность
+        const severityText = p.severity >= 5 ? 'Критично' : p.severity >= 3 ? 'Средне' : 'Низко';
+        document.getElementById('viewSeverityBadge').innerText = `Важность: ${severityText}`;
         
         // Фото
         const photoContainer = document.getElementById('viewPhotoContainer');
         if (p.photo) {
-            photoContainer.innerHTML = `<img src="${p.photo}" style="width:100%; height:100%; object-fit:cover;">`;
+            photoContainer.innerHTML = `<img src="${p.photo}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;">`;
         } else {
-            photoContainer.innerHTML = `<i class="fas fa-image fa-4x" style="color:#ddd"></i>`;
+            photoContainer.innerHTML = `
+                <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#f5f5f5; border-radius:8px;">
+                    <i class="fas fa-image fa-4x" style="color:#ddd;"></i>
+                </div>
+            `;
         }
+        
+        // Обновляем счетчики лайков/дизлайков
+        document.getElementById('likeCount').textContent = p.likes || 0;
+        document.getElementById('dislikeCount').textContent = p.dislikes || 0;
+        
+        // Загружаем статус голосования пользователя
+        loadVoteStatus(p.id);
         
         document.getElementById('modalOverlay').style.display = 'block';
         document.getElementById('viewModal').style.display = 'block';
+    };
+    
+    async function loadVoteStatus(problemId) {
+        try {
+            const response = await fetch(`/api/problems/${problemId}/vote_status`);
+            const data = await response.json();
+            
+            userVote = data.user_vote;
+            updateVoteButtons();
+            
+            // Обновляем счетчики
+            document.getElementById('likeCount').textContent = data.likes || 0;
+            document.getElementById('dislikeCount').textContent = data.dislikes || 0;
+            
+        } catch (e) {
+            console.error('Error loading vote status:', e);
+        }
     }
     
-    async function completeProblem() {
+    function updateVoteButtons() {
+        const likeBtn = document.querySelector('.btn-like');
+        const dislikeBtn = document.querySelector('.btn-dislike');
+        
+        likeBtn.classList.remove('active');
+        dislikeBtn.classList.remove('active');
+        
+        if (userVote === 'like') {
+            likeBtn.classList.add('active');
+        } else if (userVote === 'dislike') {
+            dislikeBtn.classList.add('active');
+        }
+    }
+    
+    window.completeProblem = async function() {
+        if (!currentViewId) return;
+        
         if (!confirm('Вы уверены, что выполнили эту задачу?')) return;
         
         try {
@@ -666,22 +736,33 @@
                 
                 alert(`Отлично! Задача выполнена. Начислено +${data.reward} ФМ`);
             }
-        } catch (e) { console.error(e); }
-    }
+        } catch (e) { 
+            console.error(e);
+            alert('Ошибка выполнения задачи');
+        }
+    };
     
-    function showComplaintForm() {
+    window.showComplaintForm = function() {
         document.getElementById('viewModal').style.display = 'none';
         document.getElementById('complaintModal').style.display = 'block';
-    }
+    };
     
-    async function submitComplaint() {
+    window.submitComplaint = async function() {
         const reason = document.getElementById('complaintReason').value;
         const text = document.getElementById('complaintText').value;
         
-        if(!reason) return alert('Выберите причину');
+        if(!reason) {
+            alert('Выберите причину');
+            return;
+        }
+        
+        if (!currentViewId) {
+            alert('Ошибка: проблема не выбрана');
+            return;
+        }
         
         try {
-            await fetch('/api/complaints/add', {
+            const response = await fetch('/api/complaints/add', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -691,82 +772,52 @@
                 })
             });
             
-            closeAllModals();
-            alert('Жалоба отправлена модераторам.');
-        } catch(e) { console.error(e); }
-    }
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                closeAllModals();
+                alert('Жалоба отправлена модераторам.');
+            } else {
+                alert('Ошибка отправки жалобы');
+            }
+        } catch(e) { 
+            console.error(e);
+            alert('Ошибка сети');
+        }
+    };
+    
+    window.voteProblem = async function(type) {
+        if (!currentProblemId) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${currentProblemId}/vote`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ type: type })
+            });
+            
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                // Обновляем счетчики
+                document.getElementById('likeCount').textContent = data.likes;
+                document.getElementById('dislikeCount').textContent = data.dislikes;
+                
+                // Обновляем состояние кнопок
+                if (userVote === type) {
+                    userVote = null; // Отмена голоса
+                } else {
+                    userVote = type; // Новый голос
+                }
+                updateVoteButtons();
+            }
+        } catch (e) {
+            console.error('Error voting:', e);
+            alert('Ошибка голосования');
+        }
+    };
 
     // Запуск карты после загрузки DOM
     document.addEventListener('DOMContentLoaded', initMap);
-	
-	
-	let currentProblemId = null;
-	let userVote = null;
-
-	// При открытии модального окна
-	async function openViewModal(p) {
-		currentProblemId = p.id;
-		currentViewId = p.id;
-		
-		// Загружаем статус голосования
-		try {
-			const response = await fetch(`/api/problems/${p.id}/vote_status`);
-			const data = await response.json();
-			
-			document.getElementById('likeCount').textContent = data.likes || 0;
-			document.getElementById('dislikeCount').textContent = data.dislikes || 0;
-			
-			userVote = data.user_vote;
-			updateVoteButtons();
-		} catch (e) {
-			console.error('Error loading vote status:', e);
-		}
-		
-		// Остальной код...
-	}
-
-	function updateVoteButtons() {
-		const likeBtn = document.querySelector('.btn-like');
-		const dislikeBtn = document.querySelector('.btn-dislike');
-		
-		likeBtn.classList.remove('active');
-		dislikeBtn.classList.remove('active');
-		
-		if (userVote === 'like') {
-			likeBtn.classList.add('active');
-		} else if (userVote === 'dislike') {
-			dislikeBtn.classList.add('active');
-		}
-	}
-
-	async function voteProblem(type) {
-		if (!currentProblemId) return;
-		
-		try {
-			const response = await fetch(`/api/problems/${currentProblemId}/vote`, {
-				method: 'POST',
-				headers: {'Content-Type': 'application/json'},
-				body: JSON.stringify({ type: type })
-			});
-			
-			const data = await response.json();
-			
-			if (data.status === 'success') {
-				// Обновляем счетчики
-				document.getElementById('likeCount').textContent = data.likes;
-				document.getElementById('dislikeCount').textContent = data.dislikes;
-				
-				// Обновляем состояние кнопок
-				if (userVote === type) {
-					userVote = null; // Отмена голоса
-				} else {
-					userVote = type; // Новый голос
-				}
-				updateVoteButtons();
-			}
-		} catch (e) {
-			console.error('Error voting:', e);
-		}
-	}
 </script>
 {% endblock %}
