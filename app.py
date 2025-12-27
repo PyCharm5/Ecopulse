@@ -11,6 +11,11 @@ import secrets
 from config import Config
 from models import db, User, Problem, Complaint, Comment, TaskCompletion, Order, Vote, SensorData
 
+# Импорт новых модулей
+from decorators import admin_required
+from constants import ProblemStatus, ProblemSeverity, ProblemCategory, OrderStatus, ComplaintStatus, ConfigDefaults
+from utils import save_uploaded_file, get_coordinates_from_request, json_response, is_valid_image_file
+
 app = Flask(__name__)
 app.config.from_object(Config)
 
@@ -24,14 +29,18 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
 @login_manager.user_loader
-def load_user(user_id):
+def load_user(user_id: int) -> User:
     return User.query.get(int(user_id))
 
 @app.context_processor
 def inject_global_vars():
     return {
         'current_user': current_user,
-        'now': datetime.utcnow()
+        'now': datetime.utcnow(),
+        'ProblemStatus': ProblemStatus,
+        'ProblemSeverity': ProblemSeverity,
+        'ProblemCategory': ProblemCategory,
+        'OrderStatus': OrderStatus
     }
 
 # ==========================================
@@ -50,15 +59,12 @@ def map_view():
 
 @app.route('/admin')
 @login_required
+@admin_required
 def admin_panel():
-    if not current_user.is_admin:
-        flash('Доступ запрещен. Требуются права администратора.', 'error')
-        return redirect(url_for('index'))
-    
     users = User.query.all()
     problems = Problem.query.all()
-    complaints = Complaint.query.filter_by(status='pending').all()
-    tasks = Problem.query.filter(Problem.status != 'completed').all()
+    complaints = Complaint.query.filter_by(status=ComplaintStatus.PENDING).all()
+    tasks = Problem.query.filter(Problem.status != ProblemStatus.COMPLETED).all()
     
     total_points = sum(u.points for u in users)
     new_points_today = sum(1 for p in problems if p.created_at.date() == datetime.utcnow().date())
@@ -76,14 +82,12 @@ def admin_panel():
 
 @app.route('/admin/profile')
 @login_required
+@admin_required
 def admin_profile_view():
     """Отдельная страница управления для админа (из admin_profile.html)"""
-    if not current_user.is_admin:
-        return redirect(url_for('index'))
-        
     users = User.query.all()
     problems = Problem.query.all()
-    complaints = Complaint.query.filter_by(status='pending').all()
+    complaints = Complaint.query.filter_by(status=ComplaintStatus.PENDING).all()
     
     return render_template('admin_profile.html',
                          users=users,
@@ -96,7 +100,7 @@ def profile():
     # Мои проблемы (сортировка по новизне)
     my_reports = Problem.query.filter_by(user_id=current_user.id).order_by(Problem.created_at.desc()).all()
     # Выполненные мной задания
-    my_completed = Problem.query.filter_by(assigned_to=current_user.id, status='completed').order_by(Problem.completed_at.desc()).all()
+    my_completed = Problem.query.filter_by(assigned_to=current_user.id, status=ProblemStatus.COMPLETED).order_by(Problem.completed_at.desc()).all()
     
     # Расчет рейтинга
     all_users = User.query.order_by(User.points.desc()).all()
@@ -111,7 +115,7 @@ def profile():
 @login_required
 def dashboard():
     recent_points = Problem.query.filter_by(user_id=current_user.id).order_by(Problem.created_at.desc()).limit(5).all()
-    user_tasks = Problem.query.filter_by(assigned_to=current_user.id, status='in_progress').all()
+    user_tasks = Problem.query.filter_by(assigned_to=current_user.id, status=ProblemStatus.IN_PROGRESS).all()
     user_badges = current_user.get_badges()
     achievements = [] # Здесь можно добавить логику проверки достижений
     
@@ -126,9 +130,9 @@ def dashboard():
 @login_required
 def tasks():
     # Доступные задания: статус reported и никто не взял
-    available_tasks = Problem.query.filter_by(status='reported', assigned_to=None).all()
+    available_tasks = Problem.query.filter_by(status=ProblemStatus.REPORTED, assigned_to=None).all()
     # Мои текущие задания
-    my_tasks = Problem.query.filter_by(assigned_to=current_user.id, status='in_progress').all()
+    my_tasks = Problem.query.filter_by(assigned_to=current_user.id, status=ProblemStatus.IN_PROGRESS).all()
     
     return render_template('tasks.html', tasks=available_tasks, my_tasks=my_tasks)
 
@@ -137,7 +141,7 @@ def tasks():
 def completed_tasks():
     """Страница выполненных заданий с фотоотчетами"""
     # Все завершенные проблемы с отчетами
-    completed = Problem.query.filter_by(status='completed').all()
+    completed = Problem.query.filter_by(status=ProblemStatus.COMPLETED).all()
     
     # Собираем отчеты
     reports = []
@@ -182,8 +186,8 @@ def analytics():
     users = User.query.all()
     
     total_points = len(problems)
-    active_points = len([p for p in problems if p.status != 'completed'])
-    completed_points = len([p for p in problems if p.status == 'completed'])
+    active_points = len([p for p in problems if p.status != ProblemStatus.COMPLETED])
+    completed_points = len([p for p in problems if p.status == ProblemStatus.COMPLETED])
     
     active_users = sorted(users, key=lambda u: u.total_reports, reverse=True)[:5]
     
@@ -199,7 +203,7 @@ def analytics():
     }
 
     # Берем город из конфига или дефолтный
-    city_name = app.config.get('CITY_NAME', 'Киселевск')
+    city_name = app.config.get('CITY_NAME', ConfigDefaults.CITY_NAME)
 
     return render_template('analytics.html',
                          city_name=city_name,
@@ -285,7 +289,7 @@ def logout():
 def get_problems_api():
     """Получение списка активных проблем для карты"""
     # Показываем только не завершенные, или все (зависит от логики, тут все кроме скрытых)
-    problems = Problem.query.filter(Problem.status != 'completed').all()
+    problems = Problem.query.filter(Problem.status != ProblemStatus.COMPLETED).all()
     result = []
     for p in problems:
         result.append({
@@ -307,24 +311,18 @@ def get_problems_api():
 @app.route('/api/problems/add', methods=['POST'])
 @login_required
 def add_problem():
-    """Добавление проблемы с фото (FormData)"""
+    """Добавление проблемы с фото"""
     try:
         title = request.form.get('title')
         lat = float(request.form.get('lat'))
         lng = float(request.form.get('lng'))
         description = request.form.get('description', '')
-        category = request.form.get('category', 'other')
-        severity = int(request.form.get('severity', 3))
+        category = request.form.get('category', ProblemCategory.OTHER)
+        severity = int(request.form.get('severity', ProblemSeverity.MEDIUM))
         
-        # Обработка файла
-        photo_path = None
-        if 'photo' in request.files:
-            file = request.files['photo']
-            if file and file.filename != '':
-                filename = secure_filename(f"prob_{datetime.now().timestamp()}_{file.filename}")
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                photo_path = f"/static/uploads/{filename}"
-
+        # Обработка файла с использованием новой утилиты
+        photo_path = save_uploaded_file(request.files.get('photo'), prefix='prob')
+        
         problem = Problem(
             lat=lat, lng=lng,
             title=title,
@@ -333,71 +331,73 @@ def add_problem():
             severity=severity,
             photo=photo_path,
             user_id=current_user.id,
-            reward=app.config.get('POINTS_FOR_POINT', 15)
+            reward=app.config.get('POINTS_FOR_POINT', ConfigDefaults.POINTS_FOR_POINT),
+            status=ProblemStatus.REPORTED
         )
         
         # Начисляем опыт и баллы создателю
-        current_user.points += app.config.get('POINTS_FOR_POINT', 15)
+        points_to_add = app.config.get('POINTS_FOR_POINT', ConfigDefaults.POINTS_FOR_POINT)
+        current_user.points += points_to_add
         current_user.total_reports += 1
         current_user.experience += 30
         
         # Проверяем достижения
-        achievements = current_user.check_achievements()
+        current_user.check_achievements()
         
         db.session.add(problem)
         db.session.commit()
         
-        return jsonify({'status': 'success', 'id': problem.id})
+        return json_response('success', {'id': problem.id}, 'Проблема добавлена')
     except Exception as e:
-        print(f"Error adding problem: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        app.logger.error(f"Error adding problem: {e}")
+        return json_response('error', {}, f'Ошибка при добавлении: {str(e)}', 500)
 
 @app.route('/api/problems/<int:problem_id>/take', methods=['POST'])
 @login_required
-def take_problem(problem_id):
+def take_problem(problem_id: int):
     """Взять задание в работу"""
     problem = Problem.query.get_or_404(problem_id)
     
     if problem.assigned_to:
-        return jsonify({'status': 'error', 'message': 'Задание уже занято'})
+        return json_response('error', {}, 'Задание уже занято', 400)
     
     problem.assigned_to = current_user.id
-    problem.status = 'in_progress'
+    problem.status = ProblemStatus.IN_PROGRESS
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Задание принято')
 
 @app.route('/api/problems/<int:problem_id>/cancel', methods=['POST'])
 @login_required
-def cancel_problem(problem_id):
+def cancel_problem(problem_id: int):
     """Отменить взятое задание"""
     problem = Problem.query.get_or_404(problem_id)
     
     if problem.assigned_to != current_user.id:
-        return jsonify({'status': 'error', 'message': 'Вы не выполняете это задание'}), 403
+        return json_response('error', {}, 'Вы не выполняете это задание', 403)
     
-    if problem.status != 'in_progress':
-        return jsonify({'status': 'error', 'message': 'Задание не в работе'})
+    if problem.status != ProblemStatus.IN_PROGRESS:
+        return json_response('error', {}, 'Задание не в работе', 400)
     
     problem.assigned_to = None
-    problem.status = 'reported'
+    problem.status = ProblemStatus.REPORTED
     db.session.commit()
     
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Задание отменено')
 
 @app.route('/api/problems/<int:problem_id>/complete', methods=['POST'])
 @login_required
-def complete_problem(problem_id):
+def complete_problem(problem_id: int):
     """Отметить задание выполненным"""
     problem = Problem.query.get_or_404(problem_id)
     
     # Проверка прав (либо автор, либо исполнитель, либо админ)
     if not (current_user.id == problem.assigned_to or current_user.is_admin):
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+        return json_response('error', {}, 'Нет прав', 403)
 
-    if problem.status == 'completed':
-        return jsonify({'status': 'error', 'message': 'Уже выполнено'})
+    if problem.status == ProblemStatus.COMPLETED:
+        return json_response('error', {}, 'Уже выполнено', 400)
         
-    problem.status = 'completed'
+    problem.status = ProblemStatus.COMPLETED
     problem.completed_at = datetime.utcnow()
     
     # Начисляем награду тому, кто выполнил (или текущему юзеру, если он закрыл)
@@ -409,40 +409,29 @@ def complete_problem(problem_id):
     current_user.check_achievements()
     
     db.session.commit()
-    return jsonify({'status': 'success', 'reward': problem.reward})
+    return json_response('success', {'reward': problem.reward}, 'Задание выполнено')
 
-@app.route('/api/problems/<int:problem_id>/complete_with_photos', methods=['POST'])
+@app.route('/api/problems/complete_with_photos', methods=['POST'])
 @login_required
 def complete_problem_with_photos():
     """Завершить задание с фотоотчетом"""
     try:
         problem_id = request.form.get('problem_id')
-        problem = Problem.query.get_or_404(problem_id)
+        if not problem_id:
+            return json_response('error', {}, 'ID проблемы не указан', 400)
+            
+        problem = Problem.query.get_or_404(int(problem_id))
         
         if problem.assigned_to != current_user.id:
-            return jsonify({'status': 'error', 'message': 'Вы не выполняете это задание'}), 403
+            return json_response('error', {}, 'Вы не выполняете это задание', 403)
         
-        # Сохраняем фото "было" и "стало"
-        before_path = None
-        after_path = None
-        
-        if 'before_photo' in request.files:
-            file = request.files['before_photo']
-            if file and file.filename != '':
-                filename = secure_filename(f"before_{datetime.now().timestamp()}_{file.filename}")
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                before_path = f"/static/uploads/{filename}"
-        
-        if 'after_photo' in request.files:
-            file = request.files['after_photo']
-            if file and file.filename != '':
-                filename = secure_filename(f"after_{datetime.now().timestamp()}_{file.filename}")
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                after_path = f"/static/uploads/{filename}"
+        # Сохраняем фото "было" и "стало" с использованием утилиты
+        before_path = save_uploaded_file(request.files.get('before_photo'), prefix='before')
+        after_path = save_uploaded_file(request.files.get('after_photo'), prefix='after')
         
         # Создаем отчет о выполнении
         completion = TaskCompletion(
-            problem_id=problem_id,
+            problem_id=problem.id,
             user_id=current_user.id,
             before_photo=before_path,
             after_photo=after_path,
@@ -450,7 +439,7 @@ def complete_problem_with_photos():
         )
         
         # Обновляем статус проблемы
-        problem.status = 'completed'
+        problem.status = ProblemStatus.COMPLETED
         problem.completed_at = datetime.utcnow()
         
         # Начисляем награду
@@ -464,20 +453,24 @@ def complete_problem_with_photos():
         db.session.add(completion)
         db.session.commit()
         
-        return jsonify({'status': 'success', 'reward': problem.reward})
+        return json_response('success', {'reward': problem.reward}, 'Задание выполнено с фотоотчетом')
         
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        app.logger.error(f"Error completing problem with photos: {e}")
+        return json_response('error', {}, f'Ошибка: {str(e)}', 500)
 
 @app.route('/api/problems/<int:problem_id>/vote', methods=['POST'])
 @login_required
-def vote_problem(problem_id):
+def vote_problem(problem_id: int):
     """Проголосовать за проблему"""
-    data = request.json
+    data = request.get_json()
+    if not data:
+        return json_response('error', {}, 'Нет данных', 400)
+        
     vote_type = data.get('type')  # 'like' или 'dislike'
     
     if vote_type not in ['like', 'dislike']:
-        return jsonify({'status': 'error', 'message': 'Неверный тип голоса'}), 400
+        return json_response('error', {}, 'Неверный тип голоса', 400)
     
     # Проверяем, не голосовал ли уже пользователь
     existing_vote = Vote.query.filter_by(
@@ -520,15 +513,14 @@ def vote_problem(problem_id):
     
     db.session.commit()
     
-    return jsonify({
-        'status': 'success',
+    return json_response('success', {
         'likes': problem.likes,
         'dislikes': problem.dislikes
-    })
+    }, 'Голос учтен')
 
 @app.route('/api/problems/<int:problem_id>/vote_status')
 @login_required
-def get_vote_status(problem_id):
+def get_vote_status(problem_id: int):
     """Получить статус голосования пользователя"""
     vote = Vote.query.filter_by(
         problem_id=problem_id,
@@ -537,7 +529,7 @@ def get_vote_status(problem_id):
     
     problem = Problem.query.get_or_404(problem_id)
     
-    return jsonify({
+    return json_response('success', {
         'user_vote': vote.vote_type if vote else None,
         'likes': problem.likes,
         'dislikes': problem.dislikes
@@ -545,11 +537,9 @@ def get_vote_status(problem_id):
 
 @app.route('/api/problems/<int:problem_id>/delete', methods=['POST'])
 @login_required
-def delete_problem(problem_id):
+@admin_required
+def delete_problem(problem_id: int):
     """Удаление проблемы (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-        
     problem = Problem.query.get_or_404(problem_id)
     
     # Удаляем связанные жалобы, если есть
@@ -560,13 +550,16 @@ def delete_problem(problem_id):
     
     db.session.delete(problem)
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Проблема удалена')
 
 @app.route('/api/comments/add', methods=['POST'])
 @login_required
 def add_comment():
     """Добавить комментарий"""
-    data = request.json
+    data = request.get_json()
+    if not data or not data.get('text') or not data.get('problem_id'):
+        return json_response('error', {}, 'Неверные данные', 400)
+    
     comment = Comment(
         problem_id=data.get('problem_id'),
         user_id=current_user.id,
@@ -574,46 +567,50 @@ def add_comment():
     )
     db.session.add(comment)
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Комментарий добавлен')
 
 @app.route('/api/comments/<int:problem_id>', methods=['GET'])
 @login_required
-def get_comments(problem_id):
+def get_comments(problem_id: int):
     """Получить комментарии к проблеме"""
     comments = Comment.query.filter_by(problem_id=problem_id).order_by(Comment.created_at.asc()).all()
-    return jsonify([{
+    comments_data = [{
         'id': c.id,
         'user': c.user.username,
         'text': c.text,
         'created_at': c.created_at.isoformat(),
         'avatar': c.user.avatar
-    } for c in comments])
+    } for c in comments]
+    
+    return json_response('success', {'comments': comments_data})
 
 @app.route('/api/complaints/add', methods=['POST'])
 @login_required
 def add_complaint():
     """Подать жалобу"""
-    data = request.json
+    data = request.get_json()
+    if not data or not data.get('reason') or not data.get('problem_id'):
+        return json_response('error', {}, 'Неверные данные', 400)
+    
     complaint = Complaint(
         problem_id=data.get('problem_id'),
         user_id=current_user.id,
         reason=data.get('reason'),
-        description=data.get('description')
+        description=data.get('description', ''),
+        status=ComplaintStatus.PENDING
     )
     db.session.add(complaint)
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Жалоба отправлена')
 
 @app.route('/api/complaints/<int:complaint_id>/resolve', methods=['POST'])
 @login_required
-def resolve_complaint(complaint_id):
+@admin_required
+def resolve_complaint(complaint_id: int):
     """Разрешить жалобу (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-        
-    data = request.json
-    action = data.get('action') # 'delete_content', 'reject_complaint'
-    delete_prob = data.get('delete_problem', False)
+    data = request.get_json()
+    action = data.get('action') if data else None  # 'delete_content', 'reject_complaint'
+    delete_prob = data.get('delete_problem', False) if data else False
     
     complaint = Complaint.query.get_or_404(complaint_id)
     
@@ -621,37 +618,34 @@ def resolve_complaint(complaint_id):
         if complaint.problem:
             db.session.delete(complaint.problem)
             
-    complaint.status = 'resolved'
+    complaint.status = ComplaintStatus.RESOLVED
     db.session.commit()
     
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Жалоба обработана')
 
 @app.route('/api/user/<int:user_id>/toggle_admin', methods=['POST'])
 @login_required
-def toggle_admin(user_id):
+@admin_required
+def toggle_admin(user_id: int):
     """Сделать пользователя админом или разжаловать"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-        
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
-        return jsonify({'status': 'error', 'message': 'Нельзя изменить свои права'}), 400
+        return json_response('error', {}, 'Нельзя изменить свои права', 400)
         
     user.is_admin = not user.is_admin
     db.session.commit()
-    return jsonify({'status': 'success', 'is_admin': user.is_admin})
+    return json_response('success', {'is_admin': user.is_admin}, 
+                        f'Права {"выданы" if user.is_admin else "сняты"}')
 
 @app.route('/api/user/<int:user_id>/delete', methods=['POST'])
 @login_required
-def delete_user(user_id):
+@admin_required
+def delete_user(user_id: int):
     """Удалить пользователя (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     user = User.query.get_or_404(user_id)
     
     if user.id == current_user.id:
-        return jsonify({'status': 'error', 'message': 'Нельзя удалить себя'}), 400
+        return json_response('error', {}, 'Нельзя удалить себя', 400)
     
     # Удаляем связанные данные
     Problem.query.filter_by(user_id=user.id).delete()
@@ -664,110 +658,113 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Пользователь удален')
 
 @app.route('/api/user/<int:user_id>/reset_password', methods=['POST'])
 @login_required
-def reset_user_password(user_id):
+@admin_required
+def reset_user_password(user_id: int):
     """Сбросить пароль пользователя (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     user = User.query.get_or_404(user_id)
-    new_password = 'temp123'  # Временный пароль
+    new_password = secrets.token_urlsafe(8)[:10]  # Генерация случайного пароля
     
     user.set_password(new_password)
     db.session.commit()
     
-    return jsonify({'status': 'success', 'password': new_password})
+    return json_response('success', {'password': new_password}, 'Пароль сброшен')
 
 @app.route('/api/user/<int:user_id>/edit', methods=['POST'])
 @login_required
-def edit_user(user_id):
+@admin_required
+def edit_user(user_id: int):
     """Редактировать пользователя (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     user = User.query.get_or_404(user_id)
-    data = request.json
+    data = request.get_json()
+    
+    if not data:
+        return json_response('error', {}, 'Нет данных', 400)
     
     if 'points' in data:
-        user.points = data['points']
+        user.points = int(data['points'])
     if 'is_worker' in data:
-        user.is_worker = data['is_worker']
+        user.is_worker = bool(data['is_worker'])
     if 'city' in data:
-        user.city = data['city']
+        user.city = str(data['city'])[:100]
     
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Данные обновлены')
 
 @app.route('/api/problems/<int:problem_id>/edit', methods=['POST'])
 @login_required
-def edit_problem(problem_id):
+@admin_required
+def edit_problem(problem_id: int):
     """Редактировать проблему (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     problem = Problem.query.get_or_404(problem_id)
-    data = request.json
+    data = request.get_json()
+    
+    if not data:
+        return json_response('error', {}, 'Нет данных', 400)
     
     if 'title' in data:
-        problem.title = data['title']
+        problem.title = str(data['title'])[:200]
     if 'description' in data:
-        problem.description = data['description']
+        problem.description = str(data['description'])
     if 'severity' in data:
-        problem.severity = data['severity']
+        problem.severity = int(data['severity'])
     if 'reward' in data:
-        problem.reward = data['reward']
-    if 'status' in data:
+        problem.reward = int(data['reward'])
+    if 'status' in data and data['status'] in ProblemStatus.ALL:
         problem.status = data['status']
     
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, 'Проблема обновлена')
 
 @app.route('/api/tasks/create', methods=['POST'])
 @login_required
+@admin_required
 def create_task():
     """Создать задачу вручную (Админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
+    data = request.get_json()
+    if not data or not data.get('title'):
+        return json_response('error', {}, 'Неверные данные', 400)
     
-    data = request.json
+    lat, lng = get_coordinates_from_request(request)
     
     task = Problem(
-        lat=data.get('lat', app.config['CITY_CENTER'][0]),
-        lng=data.get('lng', app.config['CITY_CENTER'][1]),
+        lat=lat,
+        lng=lng,
         title=data['title'],
         description=data.get('description', ''),
-        category=data.get('category', 'other'),
-        severity=data.get('severity', 3),
-        reward=data.get('reward', 15),
+        category=data.get('category', ProblemCategory.OTHER),
+        severity=data.get('severity', ProblemSeverity.MEDIUM),
+        reward=data.get('reward', ConfigDefaults.POINTS_FOR_POINT),
         user_id=current_user.id,
-        status='reported'
+        status=ProblemStatus.REPORTED
     )
     
     db.session.add(task)
     db.session.commit()
     
-    return jsonify({'status': 'success', 'id': task.id})
+    return json_response('success', {'id': task.id}, 'Задача создана')
 
 @app.route('/api/user/update_balance', methods=['POST'])
 @login_required
 def update_balance():
     """Изменить баланс (покупка в магазине и т.д.)"""
-    data = request.json
-    amount = data.get('amount', 0)
+    data = request.get_json()
+    if not data:
+        return json_response('error', {}, 'Нет данных', 400)
+        
+    amount = int(data.get('amount', 0))
     current_user.points += amount
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {'new_balance': current_user.points}, 'Баланс обновлен')
 
 @app.route('/api/orders', methods=['GET'])
 @login_required
+@admin_required
 def get_orders():
     """Получить заказы (только для админа)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     orders = Order.query.order_by(Order.created_at.desc()).all()
     orders_data = []
     
@@ -786,19 +783,21 @@ def get_orders():
             'total': order.price * order.quantity
         })
     
-    return jsonify(orders_data)
+    return json_response('success', {'orders': orders_data})
 
 @app.route('/api/orders/create', methods=['POST'])
 @login_required
 def create_order():
     """Создать заказ"""
     try:
-        data = request.json
+        data = request.get_json()
+        if not data:
+            return json_response('error', {}, 'Нет данных', 400)
         
         # Проверяем баланс
-        item_price = data.get('price', 0)
+        item_price = int(data.get('price', 0))
         if current_user.points < item_price:
-            return jsonify({'status': 'error', 'message': 'Недостаточно средств'}), 400
+            return json_response('error', {}, 'Недостаточно средств', 400)
         
         # Создаем заказ
         order = Order(
@@ -810,7 +809,8 @@ def create_order():
             address=data.get('address'),
             phone=data.get('phone'),
             size=data.get('size', ''),
-            comment=data.get('comment', '')
+            comment=data.get('comment', ''),
+            status=OrderStatus.PENDING
         )
         
         # Списание баллов
@@ -827,24 +827,32 @@ def create_order():
         db.session.add(order)
         db.session.commit()
         
-        return jsonify({'status': 'success', 'order_id': order.id})
+        return json_response('success', {'order_id': order.id}, 'Заказ создан')
         
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        app.logger.error(f"Error creating order: {e}")
+        return json_response('error', {}, f'Ошибка: {str(e)}', 500)
 
 @app.route('/api/orders/<int:order_id>/update_status', methods=['POST'])
 @login_required
-def update_order_status(order_id):
+@admin_required
+def update_order_status(order_id: int):
     """Обновить статус заказа (админ)"""
-    if not current_user.is_admin:
-        return jsonify({'status': 'error', 'message': 'Нет прав'}), 403
-    
     order = Order.query.get_or_404(order_id)
-    order.status = request.json.get('status', order.status)
+    data = request.get_json()
+    
+    if not data or 'status' not in data:
+        return json_response('error', {}, 'Статус не указан', 400)
+    
+    new_status = data['status']
+    if new_status not in OrderStatus.NAMES:
+        return json_response('error', {}, 'Неверный статус', 400)
+    
+    order.status = new_status
     order.updated_at = datetime.utcnow()
     
     db.session.commit()
-    return jsonify({'status': 'success'})
+    return json_response('success', {}, f'Статус обновлен на {OrderStatus.NAMES.get(new_status, new_status)}')
 
 @app.route('/api/daily_challenge')
 @login_required
@@ -867,7 +875,7 @@ def get_daily_challenge():
         if today_problems >= challenge['target']:
             completed.append(challenge['id'])
     
-    return jsonify({
+    return json_response('success', {
         'challenges': challenges,
         'completed': completed,
         'today_problems': today_problems
@@ -884,8 +892,7 @@ def get_sensors():
     Если API ключ невалиден или лимит исчерпан, возвращает мок-данные.
     """
     # Получаем координаты из GET параметров или берем дефолтные
-    lat = request.args.get('lat', type=float) or app.config['CITY_CENTER'][0]
-    lng = request.args.get('lng', type=float) or app.config['CITY_CENTER'][1]
+    lat, lng = get_coordinates_from_request(request)
     
     api_key = app.config.get('OPENWEATHER_API_KEY')
     sensors = []
@@ -940,7 +947,7 @@ def get_sensors():
             raise Exception("API Key not configured")
             
     except Exception as e:
-        print(f"Sensor API Error (using mocks): {e}")
+        app.logger.warning(f"Sensor API Error (using mocks): {e}")
         # MOCK DATA (Генерация случайных значений, если API не работает)
         for i in range(1, 6):
             val = random.uniform(15, 30) if i % 2 == 0 else random.uniform(40, 80)
@@ -954,7 +961,7 @@ def get_sensors():
                 'lng': lng + random.uniform(-0.02, 0.02)
             })
             
-    return jsonify(sensors)
+    return json_response('success', {'sensors': sensors})
 
 # ==========================================
 # ИНИЦИАЛИЗАЦИЯ
@@ -968,13 +975,13 @@ def init_db():
         
         # Создаем админа, если нет
         if not User.query.filter_by(username='admin').first():
-            print("Создаем учетную запись администратора (admin / admin123)...")
+            app.logger.info("Создаем учетную запись администратора (admin / admin123)...")
             admin = User(
                 username='admin', 
                 email='admin@fm.ru', 
                 is_admin=True, 
                 points=1000,
-                city='Киселевск'
+                city=ConfigDefaults.CITY_NAME
             )
             admin.set_password('admin123')
             admin.referral_code = secrets.token_urlsafe(8)[:10]
@@ -982,12 +989,12 @@ def init_db():
             
         # Создаем тестового пользователя
         if not User.query.filter_by(username='user1').first():
-            print("Создаем тестового пользователя (user1 / user123)...")
+            app.logger.info("Создаем тестового пользователя (user1 / user123)...")
             user = User(
                 username='user1', 
                 email='user@fm.ru', 
                 points=100,
-                city='Киселевск'
+                city=ConfigDefaults.CITY_NAME
             )
             user.set_password('user123')
             user.referral_code = secrets.token_urlsafe(8)[:10]
@@ -995,21 +1002,21 @@ def init_db():
             
         # Добавляем тестовую проблему
         if Problem.query.count() == 0:
-            print("Добавляем тестовые данные...")
+            app.logger.info("Добавляем тестовые данные...")
             p1 = Problem(
-                lat=app.config['CITY_CENTER'][0] + 0.002, 
-                lng=app.config['CITY_CENTER'][1] + 0.002,
+                lat=ConfigDefaults.CITY_CENTER[0] + 0.002, 
+                lng=ConfigDefaults.CITY_CENTER[1] + 0.002,
                 title='Тестовая проблема: Мусор',
                 description='Пример описания проблемы.',
-                category='pollution',
-                user_id=1
+                category=ProblemCategory.POLLUTION,
+                user_id=1,
+                status=ProblemStatus.REPORTED
             )
             db.session.add(p1)
             
         db.session.commit()
-        print("База данных готова. Все таблицы созданы.")
+        app.logger.info("База данных готова. Все таблицы созданы.")
 
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, port=5000)
-    #app.run(debug=True, port=5000, host='0.0.0.0')
