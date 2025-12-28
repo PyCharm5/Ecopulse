@@ -688,25 +688,25 @@
     }
     
     async function loadSensorsData() {
-        try {
-            // Получаем сохраненные координаты города
-            const lat = localStorage.getItem('cityLat') || 54.0039;
-            const lng = localStorage.getItem('cityLng') || 86.6400;
-            
-            console.log(`Загрузка сенсоров для: ${lat}, ${lng}`);
-            
-            const response = await fetch(`/api/sensors?lat=${lat}&lng=${lng}`);
-            const data = await response.json();
-            
-            updateTable(data);
-            updateCharts(data);
-            
-        } catch (e) {
-            console.error('Ошибка загрузки данных сенсоров:', e);
-            document.getElementById('sensorsTableBody').innerHTML = 
-                '<tr><td colspan="7" class="text-center text-danger">Ошибка подключения к API</td></tr>';
-        }
-    }
+		try {
+			// Получаем сохраненные координаты города
+			const lat = localStorage.getItem('cityLat') || 53.9925;
+			const lng = localStorage.getItem('cityLng') || 86.6669;
+			
+			console.log(`Загрузка сенсоров для: ${lat}, ${lng}`);
+			
+			const response = await fetch(`/api/sensors?lat=${lat}&lng=${lng}`);
+			const sensors = await response.json();
+			
+			updateTable(sensors);
+			updateCharts(sensors);
+			
+		} catch (e) {
+			console.error('Ошибка загрузки данных сенсоров:', e);
+			document.getElementById('sensorsTableBody').innerHTML = 
+				'<tr><td colspan="7" class="text-center text-danger">Ошибка подключения к API: ' + e.message + '</td></tr>';
+		}
+	}
     
     function updateTable(sensors) {
         const tbody = document.getElementById('sensorsTableBody');
@@ -777,16 +777,16 @@
     
     // Функции для работы с заказами
     async function loadOrders() {
-        try {
-            const response = await fetch('/api/orders');
-            const orders = await response.json();
-            updateOrdersTable(orders);
-        } catch (e) {
-            console.error('Ошибка загрузки заказов:', e);
-            document.getElementById('ordersTableBody').innerHTML = 
-                '<tr><td colspan="11" class="text-center text-danger">Ошибка загрузки заказов</td></tr>';
-        }
-    }
+		try {
+			const response = await fetch('/api/orders');
+			const orders = await response.json();
+			updateOrdersTable(orders);
+		} catch (e) {
+			console.error('Ошибка загрузки заказов:', e);
+			document.getElementById('ordersTableBody').innerHTML = 
+				'<tr><td colspan="11" class="text-center text-danger">Ошибка загрузки заказов: ' + e.message + '</td></tr>';
+		}
+	}
     
     function updateOrdersTable(orders) {
         const tbody = document.getElementById('ordersTableBody');
