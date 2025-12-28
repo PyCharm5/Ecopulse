@@ -51,7 +51,7 @@ def inject_global_vars():
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html')
+    return render_template('index.html', current_user_id=current_user.id)
 
 @app.route('/map')
 @login_required
@@ -132,8 +132,9 @@ def dashboard():
 def tasks():
     # Доступные задания: статус reported и никто не взял
     available_tasks = Problem.query.filter_by(status=ProblemStatus.REPORTED, assigned_to=None).all()
-    # Мои текущие задания
-    my_tasks = Problem.query.filter_by(assigned_to=current_user.id, status=ProblemStatus.IN_PROGRESS).all()
+    
+    # Мои текущие задания (взятые мной и еще не выполненные)
+    my_tasks = Problem.query.filter_by(assigned_to=current_user.id, status=ProblemStatus.ASSIGNED).all()
     
     return render_template('tasks.html', tasks=available_tasks, my_tasks=my_tasks)
 
@@ -881,7 +882,153 @@ def get_daily_challenge():
         'completed': completed,
         'today_problems': today_problems
     })
+    
+@app.route('/api/problems/<int:problem_id>/assign', methods=['POST'])
+@login_required
+def assign_problem(problem_id: int):
+    """Взять задачу в работу"""
+    problem = Problem.query.get_or_404(problem_id)
+    
+    # Проверяем, можно ли взять задачу
+    if problem.assigned_to:
+        return json_response('error', {}, 'Задача уже занята другим пользователем', 400)
+    
+    if problem.status == ProblemStatus.COMPLETED:
+        return json_response('error', {}, 'Задача уже выполнена', 400)
+    
+    if problem.user_id == current_user.id:
+        return json_response('error', {}, 'Вы не можете взять свою же задачу', 400)
+    
+    # Закрепляем задачу за пользователем
+    problem.assigned_to = current_user.id
+    problem.status = ProblemStatus.ASSIGNED
+    
+    db.session.commit()
+    
+    return json_response('success', {}, 'Задача закреплена за вами')
+    
+@app.route('/api/problems/<int:problem_id>/unassign', methods=['POST'])
+@login_required
+def unassign_problem(problem_id: int):
+    """Отменить взятие задачи"""
+    problem = Problem.query.get_or_404(problem_id)
+    
+    # Проверяем права
+    if problem.assigned_to != current_user.id:
+        return json_response('error', {}, 'Вы не выполняете эту задачу', 403)
+    
+    if problem.status == ProblemStatus.COMPLETED:
+        return json_response('error', {}, 'Задача уже выполнена', 400)
+    
+    # Освобождаем задачу
+    problem.assigned_to = None
+    problem.status = ProblemStatus.REPORTED
+    
+    db.session.commit()
+    
+    return json_response('success', {}, 'Задача отменена')
 
+@app.route('/api/problems/<int:problem_id>/complete_with_report', methods=['POST'])
+@login_required
+def complete_with_report(problem_id: int):
+    """Завершить задачу с фотоотчетом и получить баллы"""
+    problem = Problem.query.get_or_404(problem_id)
+    
+    # Проверяем права
+    if problem.assigned_to != current_user.id:
+        return json_response('error', {}, 'Вы не выполняете эту задачу', 403)
+    
+    if problem.status == ProblemStatus.COMPLETED:
+        return json_response('error', {}, 'Задача уже выполнена', 400)
+    
+    # Получаем данные из формы
+    description = request.form.get('description', '')
+    
+    # Сохраняем фото "было" и "стало"
+    before_path = save_uploaded_file(request.files.get('before_photo'), prefix='before')
+    after_path = save_uploaded_file(request.files.get('after_photo'), prefix='after')
+    
+    # Проверяем, что загружены оба фото
+    if not after_path:
+        return json_response('error', {}, 'Необходимо загрузить фото "после выполнения"', 400)
+    
+    # Создаем отчет о выполнении
+    completion = TaskCompletion(
+        problem_id=problem.id,
+        user_id=current_user.id,
+        before_photo=before_path,
+        after_photo=after_path,
+        description=description
+    )
+    
+    # Обновляем статус задачи
+    problem.status = ProblemStatus.COMPLETED
+    problem.completed_at = datetime.utcnow()
+    problem.is_completed = True
+    problem.completed_by = current_user.id
+    
+    # Начисляем баллы исполнителю
+    current_user.points += problem.reward
+    current_user.total_completed += 1
+    current_user.experience += 50
+    
+    # Проверяем достижения
+    current_user.check_achievements()
+    
+    db.session.add(completion)
+    db.session.commit()
+    
+    return json_response('success', {
+        'reward': problem.reward,
+        'new_balance': current_user.points
+    }, 'Задача выполнена! Баллы начислены')
+    
+@app.route('/api/problems/<int:problem_id>/complete_simple', methods=['POST'])
+@login_required
+def complete_simple(problem_id: int):
+    """Завершить задачу без фотоотчета (только для тестирования)"""
+    problem = Problem.query.get_or_404(problem_id)
+    
+    # Проверяем права
+    if problem.assigned_to != current_user.id:
+        return json_response('error', {}, 'Вы не выполняете эту задачу', 403)
+    
+    if problem.status == ProblemStatus.COMPLETED:
+        return json_response('error', {}, 'Задача уже выполнена', 400)
+    
+    # Обновляем статус задачи
+    problem.status = ProblemStatus.COMPLETED
+    problem.completed_at = datetime.utcnow()
+    problem.is_completed = True
+    problem.completed_by = current_user.id
+    
+    # Начисляем баллы исполнителю
+    current_user.points += problem.reward
+    current_user.total_completed += 1
+    current_user.experience += 50
+    
+    # Проверяем достижения
+    current_user.check_achievements()
+    
+    db.session.commit()
+    
+    return json_response('success', {
+        'reward': problem.reward,
+        'new_balance': current_user.points
+    }, 'Задача выполнена! Баллы начислены')
+    
+@app.route('/api/problems/<int:problem_id>/status', methods=['GET'])
+@login_required
+def get_problem_status(problem_id: int):
+    """Получить статус проблемы"""
+    problem = Problem.query.get_or_404(problem_id)
+    return json_response('success', {
+        'status': problem.status,
+        'assigned_to': problem.assigned_to,
+        'is_completed': problem.is_completed,
+        'completed_by': problem.completed_by
+    })
+    
 # ==========================================
 # ИНТЕГРАЦИЯ ДАТЧИКОВ (OpenWeatherMap)
 # ==========================================
