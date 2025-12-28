@@ -6,6 +6,7 @@ import os
 import requests
 import random
 import secrets
+import json
 
 # Импорт конфигурации и моделей
 from config import Config
@@ -771,20 +772,20 @@ def get_orders():
     for order in orders:
         orders_data.append({
             'id': order.id,
-            'user': order.user.username,
+            'user': order.user.username if order.user else 'Неизвестно',
             'item': order.item_name,
             'price': order.price,
             'quantity': order.quantity,
-            'address': order.address,
-            'phone': order.phone,
-            'size': order.size,
+            'address': order.address or '',
+            'phone': order.phone or '',
+            'size': order.size or '',
             'status': order.status,
-            'created_at': order.created_at.strftime('%d.%m.%Y %H:%M'),
+            'created_at': order.created_at.strftime('%d.%m.%Y %H:%M') if order.created_at else '',
             'total': order.price * order.quantity
         })
     
-    return json_response('success', {'orders': orders_data})
-
+    return jsonify(orders_data)
+    
 @app.route('/api/orders/create', methods=['POST'])
 @login_required
 def create_order():
@@ -960,9 +961,9 @@ def get_sensors():
                 'lat': lat + random.uniform(-0.02, 0.02),
                 'lng': lng + random.uniform(-0.02, 0.02)
             })
-            
-    return json_response('success', {'sensors': sensors})
-
+    
+    return jsonify(sensors)
+    
 # ==========================================
 # ИНИЦИАЛИЗАЦИЯ
 # ==========================================
