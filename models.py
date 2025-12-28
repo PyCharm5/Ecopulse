@@ -122,7 +122,7 @@ class Problem(db.Model):
     # Параметры классификации
     category = db.Column(db.String(50), default='other') # pollution, plants, water, etc.
     severity = db.Column(db.Integer, default=3)          # 1-5
-    status = db.Column(db.String(20), default='reported') # reported, in_progress, completed, rejected
+    status = db.Column(db.String(20), default='reported') # reported, assigned, in_progress, completed, rejected
     reward = db.Column(db.Integer, default=15)           # Награда за выполнение
     
     # Голосование
@@ -132,14 +132,20 @@ class Problem(db.Model):
     # Связи с пользователями
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id')) # Кто взял в работу
+    completed_by = db.Column(db.Integer, db.ForeignKey('user.id')) # Кто выполнил
+    
+    # Статус выполнения
+    is_completed = db.Column(db.Boolean, default=False)  # Выполнена ли задача
     
     # Метаданные
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    completed_at = db.Column(db.DateTime)
+    assigned_at = db.Column(db.DateTime)  # Когда взяли в работу
+    completed_at = db.Column(db.DateTime)  # Когда выполнили
     
     # Отношения (для удобного доступа через ORM)
     user = db.relationship('User', foreign_keys=[user_id], backref='reported_problems')
     worker = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_problems')
+    completer = db.relationship('User', foreign_keys=[completed_by], backref='completed_problems')
     comments = db.relationship('Comment', backref='problem_comment', cascade='all,delete')
     task_completion = db.relationship('TaskCompletion', backref='problem_report', uselist=False, cascade='all,delete')
 
