@@ -192,6 +192,65 @@
     @media (max-width: 768px) {
         .tasks-container { grid-template-columns: 1fr; }
     }
+	
+	/* Новые стили для модального окна фотоотчета */
+    .report-modal {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 600px;
+        max-width: 95vw;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        z-index: 2000;
+        border: 2px solid var(--primary-green);
+    }
+    
+    .photo-upload-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 15px 0;
+    }
+    
+    .photo-upload-box {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s;
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .photo-upload-box:hover {
+        border-color: var(--primary-green);
+    }
+    
+    .photo-preview {
+        max-width: 100%;
+        max-height: 200px;
+        margin-top: 10px;
+        display: none;
+    }
+    
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1999;
+    }
 </style>
 {% endblock %}
 
@@ -200,9 +259,52 @@
     <i class="fas fa-clipboard-list fa-2x"></i>
     <div>
         <h1>Биржа заданий</h1>
-        <div style="font-size: 0.9rem; opacity: 0.8;">Выполняйте задания и получайте баллы ФМ</div>
+        <div style="font-size: 0.9rem; opacity: 0.8;">Возьмите задание, выполните его и получите баллы</div>
     </div>
 </div>
+
+<!-- Модальное окно для фотоотчета -->
+<div id="reportModal" class="report-modal">
+    <div style="padding: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: var(--primary-green);">Фотоотчет о выполнении</h3>
+            <button onclick="closeReportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999;">×</button>
+        </div>
+        
+        <input type="hidden" id="currentTaskId">
+        
+        <div class="photo-upload-container">
+            <div>
+                <div class="photo-upload-box" onclick="document.getElementById('beforePhoto').click()">
+                    <input type="file" id="beforePhoto" accept="image/*" style="display: none;" onchange="previewPhoto('before', this)">
+                    <i class="fas fa-camera fa-2x" style="color: #ccc; margin-bottom: 10px;"></i>
+                    <div style="font-weight: 700; color: #999;">Фото "Было"</div>
+                    <div style="font-size: 0.8rem; color: #bbb;">(Опционально)</div>
+                    <img id="beforePreview" class="photo-preview" src="" alt="Preview">
+                </div>
+            </div>
+            
+            <div>
+                <div class="photo-upload-box" onclick="document.getElementById('afterPhoto').click()">
+                    <input type="file" id="afterPhoto" accept="image/*" style="display: none;" onchange="previewPhoto('after', this)">
+                    <i class="fas fa-camera fa-2x" style="color: #ccc; margin-bottom: 10px;"></i>
+                    <div style="font-weight: 700; color: #999;">Фото "Стало"</div>
+                    <div style="font-size: 0.8rem; color: #bbb;">(Обязательно)</div>
+                    <img id="afterPreview" class="photo-preview" src="" alt="Preview">
+                </div>
+            </div>
+        </div>
+        
+        <textarea id="reportDescription" placeholder="Опишите проделанную работу..." 
+                  style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; margin: 15px 0; min-height: 100px;"></textarea>
+        
+        <button onclick="submitReport()" style="width: 100%; background: var(--primary-green); color: white; border: none; padding: 14px; border-radius: 25px; font-weight: 700; cursor: pointer;">
+            <i class="fas fa-check"></i> Отправить отчет и получить баллы
+        </button>
+    </div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" onclick="closeReportModal()"></div>
 
 <div class="tasks-container">
     
@@ -237,23 +339,31 @@
                 <div class="task-meta">
                     <span><i class="fas fa-user"></i> {{ task.user.username if task.user else 'Аноним' }}</span>
                     <span><i class="far fa-calendar-alt"></i> {{ task.created_at.strftime('%d.%m') }}</span>
+                    {% if task.assigned_to %}
+                    <span style="color: var(--accent-red);"><i class="fas fa-user-clock"></i> Занята</span>
+                    {% endif %}
                 </div>
                 
+                {% if not task.assigned_to %}
                 <div class="task-actions">
-					<button class="btn-action btn-complete" onclick="completeTaskWithPhotos({{ task.id }})">
-						<i class="fas fa-check"></i> Завершить с фото
-					</button>
-					<button class="btn-action btn-cancel" onclick="cancelTask({{ task.id }})">
-						<i class="fas fa-times"></i> Отменить
-					</button>
-				</div>
+                    <button class="btn-action btn-take" onclick="takeTask({{ task.id }})">
+                        <i class="fas fa-hand-paper"></i> Взять задание
+                    </button>
+                </div>
+                {% else %}
+                <div class="task-actions">
+                    <button class="btn-action" style="background: #999; color: white;" disabled>
+                        <i class="fas fa-lock"></i> Занята
+                    </button>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         {% else %}
             <div class="empty-state">
                 <i class="fas fa-check-circle fa-3x mb-3"></i>
                 <h4>Нет новых заданий</h4>
-                <p>В городе все спокойно. Загляните позже!</p>
+                <p>Все задачи взяты или решены. Загляните позже!</p>
             </div>
         {% endif %}
     </div>
@@ -261,7 +371,7 @@
     <!-- ПРАВАЯ КОЛОНКА: МОИ ЗАДАНИЯ -->
     <div class="tasks-section">
         <div class="tasks-column-title">
-            <i class="fas fa-briefcase"></i> Мои текущие задачи
+            <i class="fas fa-briefcase"></i> Мои текущие задачи ({{ my_tasks|length }})
         </div>
         
         {% if my_tasks %}
@@ -273,19 +383,20 @@
                 </div>
                 
                 <div class="task-desc">
-                    {{ task.description[:100] }}...
+                    {{ task.description[:100] if task.description else 'Нет описания' }}...
                 </div>
                 
                 <div class="task-meta">
-                    <span><i class="fas fa-map-marker-alt"></i> {{ "%.3f"|format(task.lat) }}, {{ "%.3f"|format(task.lng) }}</span>
+                    <span><i class="fas fa-map-marker-alt"></i> Координаты: {{ "%.4f"|format(task.lat) }}, {{ "%.4f"|format(task.lng) }}</span>
+                    <span><i class="far fa-clock"></i> Взято: {{ task.assigned_at.strftime('%d.%m') if task.assigned_at else task.created_at.strftime('%d.%m') }}</span>
                 </div>
                 
                 <div class="task-actions">
-                    <button class="btn-action btn-complete" onclick="completeTask({{ task.id }})">
-                        <i class="fas fa-check"></i> Готово
+                    <button class="btn-action btn-complete" onclick="openReportModal({{ task.id }})">
+                        <i class="fas fa-camera"></i> Завершить с фото
                     </button>
                     <button class="btn-action btn-cancel" onclick="cancelTask({{ task.id }})">
-                        <i class="fas fa-times"></i>
+                        <i class="fas fa-times"></i> Отказаться
                     </button>
                 </div>
             </div>
@@ -293,97 +404,163 @@
         {% else %}
             <div class="empty-state">
                 <i class="fas fa-coffee fa-3x mb-3"></i>
-                <h4>Список пуст</h4>
-                <p>Возьмите задание из списка слева или на карте</p>
-                <a href="{{ url_for('index') }}" class="btn-action btn-take" style="margin-top:15px; text-decoration:none;">
-                    Перейти к карте
-                </a>
+                <h4>Нет активных задач</h4>
+                <p>Возьмите задание из списка слева</p>
             </div>
         {% endif %}
     </div>
 </div>
 
 <script>
+    let currentTaskForReport = null;
+    
+    // Взять задачу
     async function takeTask(taskId) {
-        if(!confirm('Взять это задание в работу?')) return;
+        if(!confirm('Взять это задание в работу?\nПосле взятия оно будет закреплено за вами.')) return;
         
         try {
-            const response = await fetch(`/api/problems/${taskId}/take`, { method: 'POST' });
+            const response = await fetch(`/api/problems/${taskId}/assign`, { method: 'POST' });
             const result = await response.json();
             
             if (result.status === 'success') {
-                alert('Задание принято! Приступайте к выполнению.');
-                location.reload();
+                showNotification('success', 'Успех', 'Задача закреплена за вами!');
+                setTimeout(() => location.reload(), 1000);
             } else {
-                alert(result.message || 'Ошибка');
+                showNotification('error', 'Ошибка', result.message || 'Не удалось взять задачу');
             }
         } catch (error) {
             console.error('Ошибка:', error);
-            alert('Ошибка соединения');
+            showNotification('error', 'Ошибка', 'Ошибка соединения');
         }
     }
     
-    async function completeTask(taskId) {
-        if(!confirm('Подтверждаете выполнение?')) return;
+    // Отказаться от задачи
+    async function cancelTask(taskId) {
+        if(!confirm('Вы уверены, что хотите отказаться от выполнения этой задачи?')) return;
         
         try {
-            const response = await fetch(`/api/problems/${taskId}/complete`, { method: 'POST' });
+            const response = await fetch(`/api/problems/${taskId}/unassign`, { method: 'POST' });
             const result = await response.json();
             
             if (result.status === 'success') {
+                showNotification('success', 'Успех', 'Задача отменена');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('error', 'Ошибка', result.message || 'Ошибка отмены');
+            }
+        } catch (error) {
+            showNotification('error', 'Ошибка', 'Ошибка соединения');
+        }
+    }
+    
+    // Открыть модальное окно для фотоотчета
+    function openReportModal(taskId) {
+        currentTaskForReport = taskId;
+        document.getElementById('currentTaskId').value = taskId;
+        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById('reportModal').style.display = 'block';
+        
+        // Сброс формы
+        document.getElementById('beforePhoto').value = '';
+        document.getElementById('afterPhoto').value = '';
+        document.getElementById('beforePreview').style.display = 'none';
+        document.getElementById('afterPreview').style.display = 'none';
+        document.getElementById('reportDescription').value = '';
+    }
+    
+    // Закрыть модальное окно
+    function closeReportModal() {
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('reportModal').style.display = 'none';
+        currentTaskForReport = null;
+    }
+    
+    // Предпросмотр фото
+    function previewPhoto(type, input) {
+        const file = input.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const previewId = type + 'Preview';
+                const preview = document.getElementById(previewId);
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    // Отправить отчет
+    async function submitReport() {
+        if (!currentTaskForReport) return;
+        
+        const beforePhoto = document.getElementById('beforePhoto').files[0];
+        const afterPhoto = document.getElementById('afterPhoto').files[0];
+        const description = document.getElementById('reportDescription').value;
+        
+        // Проверяем обязательное фото "после"
+        if (!afterPhoto) {
+            showNotification('error', 'Ошибка', 'Загрузите фото "после выполнения"');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('description', description);
+        if (beforePhoto) formData.append('before_photo', beforePhoto);
+        formData.append('after_photo', afterPhoto);
+        
+        try {
+            const response = await fetch(`/api/problems/${currentTaskForReport}/complete_with_report`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                closeReportModal();
+                showNotification('success', 'Поздравляем!', `Задача выполнена! Начислено +${result.reward} баллов`);
+                
                 // Обновляем баланс в шапке
                 const balanceEl = document.getElementById('currency-amount');
-                if(balanceEl) balanceEl.innerText = parseInt(balanceEl.innerText) + result.reward;
+                if(balanceEl && result.new_balance) {
+                    balanceEl.innerText = result.new_balance;
+                }
                 
-                alert(`Отлично! Задание выполнено. Начислено ${result.reward} баллов.`);
-                location.reload();
+                setTimeout(() => location.reload(), 1500);
             } else {
-                alert(result.message || 'Ошибка');
+                showNotification('error', 'Ошибка', result.message || 'Ошибка отправки отчета');
             }
         } catch (error) {
             console.error('Ошибка:', error);
-            alert('Ошибка соединения');
+            showNotification('error', 'Ошибка', 'Ошибка соединения');
         }
     }
     
-    function reportTask(taskId) {
-        // Здесь можно открыть модальное окно жалобы, как на главной
-        // Для простоты пока алерт
-        alert('Функция жалобы доступна через просмотр на карте.');
-    }
-    
-    function cancelTask(taskId) {
-        if(confirm('Вы действительно хотите отказаться от выполнения задания?')) {
-            // В реальном приложении нужен эндпоинт /cancel
-            // Пока просто перезагрузим страницу (в демо-версии отмена не реализована на бэке)
-            alert('В демо-режиме отмена не реализована. Обратитесь к администратору.');
+    // Для тестирования - быстрое завершение без фото
+    async function completeSimple(taskId) {
+        if(!confirm('Завершить задачу без фотоотчета? (только для тестирования)')) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${taskId}/complete_simple`, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                showNotification('success', 'Успех', `Задача выполнена! Начислено +${result.reward} баллов`);
+                
+                // Обновляем баланс
+                const balanceEl = document.getElementById('currency-amount');
+                if(balanceEl && result.new_balance) {
+                    balanceEl.innerText = result.new_balance;
+                }
+                
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('error', 'Ошибка', result.message);
+            }
+        } catch (error) {
+            showNotification('error', 'Ошибка', 'Ошибка соединения');
         }
     }
-	
-	// Функция отмены задания
-	async function cancelTask(taskId) {
-		if(!confirm('Вы уверены, что хотите отменить это задание?')) return;
-		
-		try {
-			const response = await fetch(`/api/problems/${taskId}/cancel`, { method: 'POST' });
-			const result = await response.json();
-			
-			if (result.status === 'success') {
-				showNotification('success', 'Успех', 'Задание отменено');
-				setTimeout(() => location.reload(), 1000);
-			} else {
-				showNotification('error', 'Ошибка', result.message);
-			}
-		} catch (error) {
-			showNotification('error', 'Ошибка', 'Ошибка соединения');
-		}
-	}
-
-	// Функция завершения с фото
-	function completeTaskWithPhotos(taskId) {
-		// Здесь будет модальное окно для загрузки фото
-		// Пока используем старую функцию
-		completeTask(taskId);
-	}
 </script>
 {% endblock %}
