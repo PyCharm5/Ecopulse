@@ -433,6 +433,8 @@
 </div>
 
 <script>
+	const currentUserId = {{ current_user_id|tojson }};
+
     let map;
     let markers = {};
     let currentLatLng = null; // Координаты клика
@@ -683,9 +685,287 @@
         // Загружаем статус голосования пользователя
         loadVoteStatus(p.id);
         
+        // Определяем, что показывать в нижней части модального окна
+        updateModalFooter(p);
+        
         document.getElementById('modalOverlay').style.display = 'block';
         document.getElementById('viewModal').style.display = 'block';
     };
+    
+    // Функция обновления нижней части модального окна в зависимости от статуса задачи
+    function updateModalFooter(p) {
+        const footer = document.querySelector('#viewModal .modal-footer');
+        
+        // Проверяем статус задачи
+        if (p.status === 'completed') {
+            // Задача уже выполнена
+            footer.innerHTML = `
+                <div style="color: #27AE60; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-check-circle"></i> Задача выполнена
+                </div>
+            `;
+        } else if (p.assigned_to) {
+            // Задача назначена кому-то
+            if (p.assigned_to === currentUserId) {
+                // Задача назначена текущему пользователю
+                footer.innerHTML = `
+                    <button style="background: white; border: 2px solid var(--primary-green); color: var(--primary-green); padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer; margin-right: 10px;" onclick="openReportModalFromMap(${p.id})">
+                        <i class="fas fa-camera"></i> Завершить с фото
+                    </button>
+                    <button style="background: white; border: 2px solid #999; color: #999; padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer;" onclick="unassignProblemFromMap(${p.id})">
+                        <i class="fas fa-times"></i> Отказаться
+                    </button>
+                `;
+            } else {
+                // Задача назначена другому пользователю
+                footer.innerHTML = `
+                    <div style="color: #999; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-user-clock"></i> Задача занята другим пользователем
+                    </div>
+                `;
+            }
+        } else {
+            // Задача свободна
+            if (p.user_id === currentUserId) {
+                // Задача создана текущим пользователем
+                footer.innerHTML = `
+                    <div style="color: var(--primary-green); font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-info-circle"></i> Вы создали эту задачу
+                    </div>
+                `;
+            } else {
+                // Задача свободна для взятия
+                footer.innerHTML = `
+                    <button style="background: white; border: 2px solid var(--primary-green); color: var(--primary-green); padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer; margin-right: 10px;" onclick="assignProblemFromMap(${p.id})">
+                        <i class="fas fa-hand-paper"></i> Взять задачу
+                    </button>
+                    <button style="background: white; border: 2px solid #ddd; color: #666; padding: 10px 20px; border-radius: 20px; font-weight: 700; cursor: pointer;" onclick="showComplaintForm()">
+                        <i class="fas fa-flag"></i> Пожаловаться
+                    </button>
+                `;
+            }
+        }
+    }
+    
+    // Открыть модальное окно для фотоотчета с карты
+    async function openReportModalFromMap(problemId) {
+        // Проверяем, выполнена ли уже задача
+        try {
+            const response = await fetch(`/api/problems/${problemId}/status`);
+            const data = await response.json();
+            
+            if (data.status === 'completed') {
+                alert('Эта задача уже выполнена!');
+                closeAllModals();
+                loadProblems();
+                return;
+            }
+            
+            // Закрываем текущее модальное окно
+            closeAllModals();
+            
+            // Создаем модальное окно для фотоотчета
+            createReportModal(problemId);
+            
+        } catch (error) {
+            console.error('Ошибка проверки статуса:', error);
+            // Если не получилось проверить статус, все равно открываем форму
+            closeAllModals();
+            createReportModal(problemId);
+        }
+    }
+    
+    // Создать модальное окно для фотоотчета
+    function createReportModal(problemId) {
+        // Создаем overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.display = 'block';
+        overlay.onclick = () => {
+            document.body.removeChild(overlay);
+            document.body.removeChild(modal);
+        };
+        
+        // Создаем модальное окно
+        const modal = document.createElement('div');
+        modal.className = 'problem-modal';
+        modal.style.width = '600px';
+        modal.style.height = 'auto';
+        
+        modal.innerHTML = `
+            <div style="padding: 25px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: var(--primary-green);">Фотоотчет о выполнении</h3>
+                    <button onclick="document.body.removeChild(this.parentElement.parentElement.parentElement); document.body.removeChild(document.querySelector('.modal-overlay:last-child'))" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #999;">×</button>
+                </div>
+                
+                <input type="hidden" id="mapTaskId" value="${problemId}">
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0;">
+                    <div>
+                        <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; min-height: 150px; display: flex; flex-direction: column; justify-content: center; align-items: center;" onclick="document.getElementById('mapBeforePhoto').click()">
+                            <input type="file" id="mapBeforePhoto" accept="image/*" style="display: none;" onchange="previewMapPhoto('before', this)">
+                            <i class="fas fa-camera fa-2x" style="color: #ccc; margin-bottom: 10px;"></i>
+                            <div style="font-weight: 700; color: #999;">Фото "Было"</div>
+                            <div style="font-size: 0.8rem; color: #bbb;">(Опционально)</div>
+                            <img id="mapBeforePreview" style="max-width: 100%; max-height: 200px; margin-top: 10px; display: none;" src="" alt="Preview">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; min-height: 150px; display: flex; flex-direction: column; justify-content: center; align-items: center;" onclick="document.getElementById('mapAfterPhoto').click()">
+                            <input type="file" id="mapAfterPhoto" accept="image/*" style="display: none;" onchange="previewMapPhoto('after', this)">
+                            <i class="fas fa-camera fa-2x" style="color: #ccc; margin-bottom: 10px;"></i>
+                            <div style="font-weight: 700; color: #999;">Фото "Стало"</div>
+                            <div style="font-size: 0.8rem; color: #bbb;">(Обязательно)</div>
+                            <img id="mapAfterPreview" style="max-width: 100%; max-height: 200px; margin-top: 10px; display: none;" src="" alt="Preview">
+                        </div>
+                    </div>
+                </div>
+                
+                <textarea id="mapReportDescription" placeholder="Опишите проделанную работу..." 
+                          style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; margin: 15px 0; min-height: 100px;"></textarea>
+                
+                <button onclick="submitMapReport()" style="width: 100%; background: var(--primary-green); color: white; border: none; padding: 14px; border-radius: 25px; font-weight: 700; cursor: pointer;">
+                    <i class="fas fa-check"></i> Отправить отчет и получить баллы
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+        document.body.appendChild(modal);
+    }
+    
+    // Предпросмотр фото в модальном окне с карты
+    function previewMapPhoto(type, input) {
+        const file = input.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById(`map${type.charAt(0).toUpperCase() + type.slice(1)}Preview`);
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    // Отправить отчет с карты
+    async function submitMapReport() {
+        const problemId = document.getElementById('mapTaskId').value;
+        const beforePhoto = document.getElementById('mapBeforePhoto').files[0];
+        const afterPhoto = document.getElementById('mapAfterPhoto').files[0];
+        const description = document.getElementById('mapReportDescription').value;
+        
+        // Проверяем обязательное фото "после"
+        if (!afterPhoto) {
+            alert('Загрузите фото "после выполнения"');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('description', description);
+        if (beforePhoto) formData.append('before_photo', beforePhoto);
+        formData.append('after_photo', afterPhoto);
+        
+        try {
+            const response = await fetch(`/api/problems/${problemId}/complete_with_report`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                // Закрываем все модальные окна
+                document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
+                document.querySelectorAll('.problem-modal').forEach(el => el.remove());
+                
+                alert(`Задача выполнена! Начислено +${result.reward} баллов`);
+                
+                // Обновляем баланс в шапке
+                const balanceEl = document.getElementById('currency-amount');
+                if(balanceEl && result.new_balance) {
+                    balanceEl.innerText = result.new_balance;
+                }
+                
+                // Перезагружаем карту
+                loadProblems();
+            } else {
+                alert('Ошибка: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Ошибка:', error);
+            alert('Ошибка соединения');
+        }
+    }
+    
+    // Взять задачу с карты
+    async function assignProblemFromMap(problemId) {
+        if(!confirm('Взять эту задачу в работу?\nПосле взятия она будет закреплена за вами.')) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${problemId}/assign`, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                alert('Задача закреплена за вами! Теперь вы можете ее выполнить.');
+                closeAllModals();
+                loadProblems(); // Перезагружаем карту
+            } else {
+                alert(result.message || 'Ошибка');
+            }
+        } catch (error) {
+            alert('Ошибка соединения');
+        }
+    }
+    
+    // Отказаться от задачи с карты
+    async function unassignProblemFromMap(problemId) {
+        if(!confirm('Вы уверены, что хотите отказаться от выполнения этой задачи?')) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${problemId}/unassign`, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                alert('Задача отменена');
+                closeAllModals();
+                loadProblems(); // Перезагружаем карту
+            } else {
+                alert(result.message || 'Ошибка отмены');
+            }
+        } catch (error) {
+            alert('Ошибка соединения');
+        }
+    }
+    
+    // Быстрое выполнение задачи с карты (без фото)
+    async function completeSimpleFromMap(problemId) {
+        if(!confirm('Завершить задачу без фотоотчета? (только для тестирования)')) return;
+        
+        try {
+            const response = await fetch(`/api/problems/${problemId}/complete_simple`, { method: 'POST' });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                closeAllModals();
+                loadProblems();
+                
+                const balanceEl = document.getElementById('currency-amount');
+                if(balanceEl && result.new_balance) {
+                    balanceEl.innerText = result.new_balance;
+                }
+                
+                alert(`Задача выполнена! Начислено +${result.reward} ФМ`);
+            } else {
+                alert(result.message || 'Ошибка');
+            }
+        } catch (e) { 
+            console.error(e);
+            alert('Ошибка выполнения задачи');
+        }
+    }
     
     async function loadVoteStatus(problemId) {
         try {
