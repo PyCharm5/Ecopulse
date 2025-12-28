@@ -111,3 +111,13 @@ class ConfigDefaults:
     POINTS_FOR_POINT = 15
     CITY_NAME = 'Киселевск'
     CITY_CENTER = [53.9925, 86.6669]  # Киселевск
+    
+class ProblemStatus:
+    """Статусы проблем"""
+    REPORTED = 'reported'    # Создана, но не взята
+    ASSIGNED = 'assigned'    # Взята пользователем
+    IN_PROGRESS = 'in_progress'  # В работе (можно использовать как синоним ASSIGNED)
+    COMPLETED = 'completed'  # Выполнена
+    REJECTED = 'rejected'    # Отклонена
+    
+    ALL = [REPORTED, ASSIGNED, IN_PROGRESS, COMPLETED, REJECTED]
