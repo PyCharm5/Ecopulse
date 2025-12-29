@@ -605,26 +605,6 @@ def add_complaint():
     db.session.commit()
     return json_response('success', {}, 'Жалоба отправлена')
 
-@app.route('/api/complaints/<int:complaint_id>/resolve', methods=['POST'])
-@login_required
-@admin_required
-def resolve_complaint(complaint_id: int):
-    """Разрешить жалобу (Админ)"""
-    data = request.get_json()
-    action = data.get('action') if data else None  # 'delete_content', 'reject_complaint'
-    delete_prob = data.get('delete_problem', False) if data else False
-    
-    complaint = Complaint.query.get_or_404(complaint_id)
-    
-    if delete_prob or action == 'delete_content':
-        if complaint.problem:
-            db.session.delete(complaint.problem)
-            
-    complaint.status = ComplaintStatus.RESOLVED
-    db.session.commit()
-    
-    return json_response('success', {}, 'Жалоба обработана')
-
 @app.route('/api/user/<int:user_id>/toggle_admin', methods=['POST'])
 @login_required
 @admin_required
@@ -1028,7 +1008,238 @@ def get_problem_status(problem_id: int):
         'is_completed': problem.is_completed,
         'completed_by': problem.completed_by
     })
+
+# ==========================================
+# API ДЛЯ ЖАЛОБ (МОДЕРАЦИЯ)
+# ==========================================
+
+@app.route('/api/complaints/all', methods=['GET'])
+@login_required
+@admin_required
+def get_all_complaints():
+    """Получить список всех жалоб для админки"""
+    complaints = Complaint.query.order_by(Complaint.created_at.desc()).all()
     
+    complaints_data = []
+    for complaint in complaints:
+        complaints_data.append({
+            'id': complaint.id,
+            'problem_id': complaint.problem_id,
+            'problem_title': complaint.problem.title if complaint.problem else 'Проблема удалена',
+            'problem_status': complaint.problem.status if complaint.problem else '',
+            'problem_user': complaint.problem.user.username if complaint.problem and complaint.problem.user else '',
+            'reason': complaint.reason,
+            'reason_text': get_reason_text(complaint.reason),
+            'description': complaint.description,
+            'status': complaint.status,
+            'status_text': get_status_text(complaint.status),
+            'user': complaint.user.username if complaint.user else 'Аноним',
+            'user_id': complaint.user_id,
+            'created_at': complaint.created_at.strftime('%d.%m.%Y %H:%M'),
+            'resolved_at': complaint.resolved_at.strftime('%d.%m.%Y %H:%M') if complaint.resolved_at else None,
+            'resolved_by': complaint.admin.username if complaint.admin else None,
+            'admin_comment': complaint.admin_comment
+        })
+    
+    return jsonify(complaints_data)
+
+@app.route('/api/complaints/stats', methods=['GET'])
+@login_required
+@admin_required
+def get_complaints_stats():
+    """Получить статистику по жалобам"""
+    total = Complaint.query.count()
+    pending = Complaint.query.filter_by(status=ComplaintStatus.PENDING).count()
+    resolved = Complaint.query.filter_by(status=ComplaintStatus.RESOLVED).count()
+    rejected = Complaint.query.filter_by(status=ComplaintStatus.REJECTED).count()
+    
+    # Статистика по причинам за последние 30 дней
+    from datetime import datetime, timedelta
+    month_ago = datetime.utcnow() - timedelta(days=30)
+    recent_complaints = Complaint.query.filter(Complaint.created_at >= month_ago).all()
+    
+    reasons = {}
+    for c in recent_complaints:
+        reasons[c.reason] = reasons.get(c.reason, 0) + 1
+    
+    return jsonify({
+        'total': total,
+        'pending': pending,
+        'resolved': resolved,
+        'rejected': rejected,
+        'reasons': reasons,
+        'recent_total': len(recent_complaints)
+    })
+
+@app.route('/api/problems/refresh', methods=['GET'])
+@login_required
+def refresh_problems():
+    """Обновить список проблем (после удаления через жалобы)"""
+    try:
+        # Просто возвращаем успех, frontend сам перезагрузит
+        return json_response('success', {}, 'Список проблем обновлен')
+    except Exception as e:
+        app.logger.error(f"Error refreshing problems: {e}")
+        return json_response('error', {}, 'Ошибка обновления', 500)
+        
+@app.route('/api/problems/refresh_map', methods=['GET'])
+@login_required
+def refresh_map_markers():
+    """Обновить маркеры на карте после удаления проблем"""
+    try:
+        problems = Problem.query.filter(Problem.status != ProblemStatus.COMPLETED).all()
+        result = []
+        for p in problems:
+            result.append({
+                'id': p.id,
+                'lat': p.lat,
+                'lng': p.lng,
+                'title': p.title,
+                'description': p.description,
+                'category': p.category,
+                'severity': p.severity,
+                'reward': p.reward,
+                'status': p.status,
+                'photo': p.photo,
+                'likes': p.likes,
+                'dislikes': p.dislikes
+            })
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error refreshing map markers: {e}")
+        return json_response('error', {}, 'Ошибка обновления карты', 500)
+
+@app.route('/api/complaints/<int:complaint_id>/resolve', methods=['POST'])
+@login_required
+@admin_required
+def resolve_complaint(complaint_id):
+    """Разрешить жалобу - основная функция обработки"""
+    try:
+        data = request.get_json()
+        if not data:
+            return json_response('error', {}, 'Нет данных', 400)
+        
+        action = data.get('action')  # 'delete_problem', 'reject', 'ignore'
+        admin_comment = data.get('admin_comment', '')
+        
+        complaint = Complaint.query.get_or_404(complaint_id)
+        
+        if complaint.status != ComplaintStatus.PENDING:
+            return json_response('error', {}, 'Жалоба уже обработана', 400)
+        
+        # Выполняем выбранное действие
+        if action == 'delete_problem':
+            if complaint.problem:
+                # Удаляем проблему и связанные данные
+                problem = complaint.problem
+                
+                # Наказываем автора проблемы (отнимаем баллы)
+                if problem.user:
+                    problem.user.points = max(0, problem.user.points - problem.reward)
+                    problem.user.total_reports = max(0, problem.user.total_reports - 1)
+                    db.session.add(problem.user)
+                
+                # Удаляем связанные записи
+                Comment.query.filter_by(problem_id=problem.id).delete()
+                Vote.query.filter_by(problem_id=problem.id).delete()
+                TaskCompletion.query.filter_by(problem_id=problem.id).delete()
+                
+                # Сначала удаляем связанные жалобы на эту проблему
+                Complaint.query.filter_by(problem_id=problem.id).delete()
+                
+                # Теперь удаляем саму проблему
+                db.session.delete(problem)
+                action_taken = 'problem_deleted'
+                
+        elif action == 'reject':
+            # Отклоняем жалобу как необоснованную
+            action_taken = 'complaint_rejected'
+            
+        elif action == 'ignore':
+            # Просто отмечаем как обработанную без действий
+            action_taken = 'no_action'
+            
+        else:
+            return json_response('error', {}, 'Неизвестное действие', 400)
+        
+        # Обновляем статус жалобы
+        complaint.status = ComplaintStatus.RESOLVED
+        complaint.resolved_at = datetime.utcnow()
+        complaint.resolved_by = current_user.id
+        complaint.action_taken = action_taken
+        complaint.admin_comment = admin_comment
+        
+        db.session.commit()
+        
+        return json_response('success', {}, 'Жалоба успешно обработана')
+        
+    except Exception as e:
+        app.logger.error(f"Error resolving complaint: {e}")
+        db.session.rollback()
+        return json_response('error', {}, f'Ошибка: {str(e)}', 500)
+
+@app.route('/api/complaints/<int:complaint_id>/reject', methods=['POST'])
+@login_required
+@admin_required
+def reject_complaint_admin(complaint_id):
+    """Быстрое отклонение жалобы"""
+    try:
+        complaint = Complaint.query.get_or_404(complaint_id)
+        
+        if complaint.status != ComplaintStatus.PENDING:
+            return json_response('error', {}, 'Жалоба уже обработана', 400)
+        
+        complaint.status = ComplaintStatus.REJECTED
+        complaint.resolved_at = datetime.utcnow()
+        complaint.resolved_by = current_user.id
+        complaint.action_taken = 'complaint_rejected'
+        
+        db.session.commit()
+        
+        return json_response('success', {}, 'Жалоба отклонена')
+        
+    except Exception as e:
+        app.logger.error(f"Error rejecting complaint: {e}")
+        return json_response('error', {}, f'Ошибка: {str(e)}', 500)
+
+@app.route('/api/complaints/<int:complaint_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_complaint_admin(complaint_id):
+    """Удалить жалобу (только для админа)"""
+    try:
+        complaint = Complaint.query.get_or_404(complaint_id)
+        
+        db.session.delete(complaint)
+        db.session.commit()
+        
+        return json_response('success', {}, 'Жалоба удалена')
+        
+    except Exception as e:
+        app.logger.error(f"Error deleting complaint: {e}")
+        return json_response('error', {}, f'Ошибка: {str(e)}', 500)
+
+# Вспомогательные функции
+def get_reason_text(reason):
+    """Получить русское название причины"""
+    reasons = {
+        'spam': 'Спам/Реклама',
+        'fake': 'Фейковая проблема',
+        'offensive': 'Оскорбительный контент',
+        'duplicate': 'Дубликат',
+        'other': 'Другое'
+    }
+    return reasons.get(reason, reason)
+
+def get_status_text(status):
+    """Получить русское название статуса"""
+    statuses = {
+        'pending': 'На рассмотрении',
+        'resolved': 'Обработана',
+        'rejected': 'Отклонена'
+    }
+    return statuses.get(status, status)
+
 # ==========================================
 # ИНТЕГРАЦИЯ ДАТЧИКОВ (OpenWeatherMap)
 # ==========================================
