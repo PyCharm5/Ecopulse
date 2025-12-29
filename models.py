@@ -166,14 +166,21 @@ class Complaint(db.Model):
     problem_id = db.Column(db.Integer, db.ForeignKey('problem.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id')) # Кто пожаловался
     
-    reason = db.Column(db.String(100)) # spam, fake, offensive
+    reason = db.Column(db.String(100)) # spam, fake, offensive, duplicate, other
     description = db.Column(db.Text)
     status = db.Column(db.String(20), default='pending') # pending, resolved, rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Новые поля для обработки жалоб
+    resolved_at = db.Column(db.DateTime)
+    resolved_by = db.Column(db.Integer, db.ForeignKey('user.id')) # Кто обработал
+    action_taken = db.Column(db.String(50)) # problem_deleted, user_warned, complaint_rejected, no_action
+    admin_comment = db.Column(db.Text) # Комментарий админа при обработке
+    
     problem = db.relationship('Problem', backref='complaints')
-    user = db.relationship('User', backref='user_complaints')
-
+    user = db.relationship('User', foreign_keys=[user_id], backref='user_complaints')
+    admin = db.relationship('User', foreign_keys=[resolved_by], backref='resolved_complaints')
+    
 class TaskCompletion(db.Model):
     """Модель фотоотчета о выполнении задания"""
     id = db.Column(db.Integer, primary_key=True)
