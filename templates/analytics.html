@@ -1,421 +1,457 @@
-{% extends "base.html" %}
-{% block title %}Аналитика - {{ city_name }}{% endblock %}
-{% block extra_css %}
-<style>
-    :root {
-        --primary-green: #1B4B43;
-        --bg-beige: #F2EFE4;
-        --accent-red: #E74C3C;
-        --accent-yellow: #F1C40F;
-        --accent-blue: #2980b9;
-        --border-thick: 2px solid #1B4B43;
-        --radius-main: 12px;
-    }
-
-    body {
-        background-color: #fafafa;
-        color: var(--primary-green);
-    }
-
-    /* Заголовок страницы */
-    .analytics-header {
-        background-color: var(--bg-beige);
-        padding: 30px;
-        border-radius: var(--radius-main);
-        border: var(--border-thick);
-        margin-bottom: 30px;
-        box-shadow: 0 4px 0 rgba(27, 75, 67, 0.1);
-        text-align: center;
-    }
-
-    .analytics-header h1 {
-        font-weight: 800;
-        margin-bottom: 10px;
-        font-size: 2rem;
-    }
-
-    .lead {
-        font-weight: 500;
-        opacity: 0.8;
-        margin: 0;
-    }
-
-    /* Сетка статистики (верхняя) */
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Профкоманды ФМ{% endblock %}</title>
     
-    .stat-card {
-        background: white;
-        border-radius: var(--radius-main);
-        padding: 25px;
-        border: var(--border-thick);
-        text-align: center;
-        transition: transform 0.2s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS (Карты) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    .stat-card:hover {
-        transform: translateY(-5px);
-    }
-    
-    .stat-card h3 {
-        color: var(--primary-green);
-        margin-bottom: 10px;
-        font-size: 1rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-    }
-    
-    .stat-number {
-        font-size: 3rem;
-        font-weight: 800;
-        color: var(--primary-green);
-        margin: 5px 0;
-        line-height: 1;
-    }
-    
-    .stat-card p {
-        color: #666;
-        font-size: 0.9rem;
-        margin: 0;
-    }
+    <style>
+        /* Основная цветовая схема */
+        :root {
+            --primary-green: #1B4B43;  /* Темно-зеленый (основной) */
+            --bg-beige: #F2EFE4;       /* Светло-бежевый (фон) */
+            --accent-red: #E74C3C;     /* Акцентный красный */
+            --accent-yellow: #F1C40F;  /* Акцентный желтый (для баллов) */
+            --accent-blue: #2980b9;    /* Акцентный синий */
+            --radius-main: 12px;       /* Закругление блоков */
+            --border-thick: 2px solid #1B4B43;
+        }
+		
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+        }
+        
+        /* --- ШАПКА САЙТА --- */
+        .main-header {
+            background-color: var(--bg-beige);
+            height: 70px;
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #dcdcdc;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
 
-    /* Секция графиков */
-    .charts-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 30px;
-        margin-bottom: 30px;
-    }
+        /* Логотип */
+        .logo {
+            font-weight: 800;
+            color: var(--primary-green);
+            text-decoration: none;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .logo span { font-style: italic; }
+        
+        /* Навигация */
+        .nav-center {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-    .chart-card {
-        background: white;
-        border-radius: var(--radius-main);
-        border: var(--border-thick);
-        padding: 25px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
+        .nav-link-custom {
+            text-decoration: none;
+            color: var(--primary-green);
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
 
-    .chart-header {
-        font-size: 1.2rem;
-        font-weight: 700;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #eee;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+        .nav-link-custom:hover {
+            background-color: rgba(27, 75, 67, 0.05);
+        }
+        
+        /* Правая часть шапки */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-    /* Топ пользователей */
-    .top-users-section {
-        background: white;
-        border-radius: var(--radius-main);
-        border: var(--border-thick);
-        padding: 25px;
-        margin-bottom: 30px;
-    }
+        .currency-badge {
+            background: white;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-weight: 800;
+            color: var(--primary-green);
+            text-decoration: none;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        /* Выпадающий список городов */
+        .city-wrapper {
+            position: relative;
+        }
 
-    .user-rank-item {
-        display: flex;
-        align-items: center;
-        padding: 15px;
-        border-bottom: 1px solid #eee;
-        transition: background 0.2s;
-    }
+        .city-dropdown {
+            position: absolute;
+            top: 45px;
+            left: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            width: 280px;
+            display: none;
+            z-index: 2000;
+            overflow: hidden;
+            border: 1px solid #ddd;
+        }
 
-    .user-rank-item:last-child { border-bottom: none; }
-    .user-rank-item:hover { background: #fcfcfc; }
+        .city-dropdown-header {
+            padding: 12px 15px;
+            background: #eee;
+            font-weight: 700;
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
 
-    .rank-num {
-        width: 35px;
-        height: 35px;
-        background: var(--bg-beige);
-        color: var(--primary-green);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        margin-right: 15px;
-    }
+        .city-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
 
-    .rank-1 { background: #F1C40F; color: white; }
-    .rank-2 { background: #bdc3c7; color: white; }
-    .rank-3 { background: #e67e22; color: white; }
+        .city-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f5f5f5;
+            transition: background 0.2s;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+        }
 
-    /* Таблица всех точек */
-    .table-container {
-        background: white;
-        border-radius: var(--radius-main);
-        border: var(--border-thick);
-        overflow: hidden;
-    }
+        .city-item:hover {
+            background: var(--bg-beige);
+            color: var(--primary-green);
+        }
 
-    table { width: 100%; border-collapse: collapse; }
-    
-    th {
-        background: var(--bg-beige);
-        color: var(--primary-green);
-        font-weight: 700;
-        padding: 15px;
-        text-align: left;
-        border-bottom: 2px solid var(--primary-green);
-        font-size: 0.85rem;
-        text-transform: uppercase;
-    }
-    
-    td {
-        padding: 15px;
-        border-bottom: 1px solid #eee;
-        color: #333;
-    }
-    
-    tr:last-child td { border-bottom: none; }
-    
-    /* Бейджи категорий и статусов */
-    .badge-custom {
-        padding: 5px 12px;
-        border-radius: 15px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-    
-    .cat-pollution { background: #ffebee; color: var(--accent-red); }
-    .cat-plants { background: #e8f5e9; color: #27AE60; }
-    .cat-water { background: #e3f2fd; color: var(--accent-blue); }
-    .cat-other { background: #f5f5f5; color: #666; }
+        .city-item.active {
+            background: var(--bg-beige);
+            font-weight: 800;
+            color: var(--primary-green);
+        }
+        
+        /* Контейнеры контента */
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+            width: 100%;
+            flex: 1;
+        }
 
-    .status-completed { color: #27AE60; font-weight: bold; }
-    .status-in_progress { color: #F39C12; font-weight: bold; }
-    .status-reported { color: var(--accent-red); font-weight: bold; }
+        /* Специальный контейнер для карты (на весь экран) */
+        .map-container {
+            height: calc(100vh - 70px);
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        /* Всплывающие уведомления */
+        .alert-container {
+            position: fixed;
+            top: 90px;
+            right: 20px;
+            z-index: 9999;
+            width: 350px;
+        }
+        
+        .alert {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border: none;
+            border-left: 5px solid;
+        }
+        
+        .alert-success { border-left-color: var(--accent-green); }
+        .alert-danger { border-left-color: var(--accent-red); }
+        
+        /* Адаптив */
+        @media (max-width: 768px) {
+            .main-header { padding: 0 15px; }
+            .nav-link-custom span { display: none; } /* Скрываем текст меню на мобильных */
+            .nav-link-custom i { font-size: 1.2rem; }
+            .city-dropdown { left: -50px; }
+        }
+		
+		/* Toast уведомления */
+		.toast-container {
+			min-width: 350px;
+			max-width: 500px;
+		}
 
-    @media (max-width: 768px) {
-        .charts-row { grid-template-columns: 1fr; }
-    }
-</style>
-{% endblock %}
+		.toast.success { background-color: #27AE60 !important; }
+		.toast.error { background-color: #E74C3C !important; }
+		.toast.info { background-color: #3498db !important; }
+		.toast.warning { background-color: #F39C12 !important; }
 
-{% block content %}
+		.toast-title {
+			font-weight: 800;
+			margin-right: 10px;
+		}
 
-<!-- Заголовок -->
-<div class="analytics-header">
-    <h1><i class="fas fa-chart-line"></i> Аналитика: {{ city_name }}</h1>
-    <p class="lead">Обзор экологической активности и состояния городской среды</p>
-</div>
-
-<!-- Карточки статистики -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3><i class="fas fa-map-marker-alt"></i> Всего точек</h3>
-        <div class="stat-number">{{ total_points }}</div>
-        <p>Зафиксировано проблем</p>
-    </div>
-    
-    <div class="stat-card">
-        <h3><i class="fas fa-exclamation-circle" style="color:var(--accent-red);"></i> Активных</h3>
-        <div class="stat-number" style="color:var(--accent-red);">{{ active_points }}</div>
-        <p>Требуют решения</p>
-    </div>
-    
-    <div class="stat-card">
-        <h3><i class="fas fa-check-circle" style="color:#27AE60;"></i> Решено</h3>
-        <div class="stat-number" style="color:#27AE60;">{{ completed_points }}</div>
-        <p>Успешных кейсов</p>
-    </div>
-    
-    <div class="stat-card">
-        <h3><i class="fas fa-users"></i> Активистов</h3>
-        <div class="stat-number" style="color:var(--accent-blue);">{{ active_users|length }}</div>
-        <p>В топе рейтинга</p>
-    </div>
-</div>
-
-<!-- Графики -->
-<div class="charts-row">
-    <div class="chart-card">
-        <div class="chart-header">
-            <i class="fas fa-chart-pie"></i> Категории проблем
-        </div>
-        <div style="height: 300px; position: relative;">
-            <canvas id="categoryChart"></canvas>
-        </div>
-    </div>
-    
-    <div class="chart-card">
-        <div class="chart-header">
-            <i class="fas fa-layer-group"></i> Уровень серьезности
-        </div>
-        <div style="height: 300px; position: relative;">
-            <canvas id="priorityChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<!-- Топ активистов и Таблица -->
-<div class="row">
-    <div class="col-md-4">
-        <div class="top-users-section">
-            <div class="chart-header">
-                <i class="fas fa-trophy"></i> Топ-5 Активистов
-            </div>
-            
-            {% if active_users %}
-                {% for user in active_users %}
-                <div class="user-rank-item">
-                    <div class="rank-num rank-{{ loop.index }}">{{ loop.index }}</div>
-                    <div style="flex:1;">
-                        <div style="font-weight:700;">{{ user.username }}</div>
-                        <div style="font-size:0.8rem; color:#888;">{{ user.total_points_added }} заявок</div>
-                    </div>
-                    <div style="font-weight:800; color:var(--primary-green);">
-                        {{ user.points }} 🟡
+		.toast-message {
+			font-weight: 500;
+		}
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- ШАПКА -->
+    <header class="main-header">
+        <!-- Логотип -->
+        <a href="{{ url_for('index') }}" class="logo">
+            <i class="fas fa-leaf"></i>
+            Профкоманды <span>ФМ</span>
+        </a>
+        
+        <!-- Центральное меню -->
+        <nav class="nav-center">
+            <!-- Выбор города -->
+            <div class="city-wrapper">
+                <div class="nav-link-custom" onclick="toggleCities()" id="cityBtn">
+                    <i class="fas fa-map-marker-alt"></i> 
+                    <span id="currentCityName">Киселевск</span> 
+                    <i class="fas fa-chevron-down" style="font-size:0.8em; margin-left:5px;"></i>
+                </div>
+                <div class="city-dropdown" id="cityDropdown">
+                    <div class="city-dropdown-header">Выберите город присутствия</div>
+                    <div class="city-list" id="cityList">
+                        <!-- Список городов генерируется JS -->
                     </div>
                 </div>
-                {% endfor %}
+            </div>
+            
+            <a href="{{ url_for('index') }}" class="nav-link-custom" title="Карта">
+                <i class="far fa-map"></i> <span>Карта</span>
+            </a>
+            <a href="{{ url_for('tasks') }}" class="nav-link-custom" title="Задания">
+                <i class="fas fa-tasks"></i> <span>Задания</span>
+            </a>
+			<a href="{{ url_for('completed_tasks') }}" class="nav-link-custom" title="Выполненные">
+				<i class="fas fa-check-double"></i> <span>Выполнено</span>
+			</a>
+            <a href="{{ url_for('rating') }}" class="nav-link-custom" title="Рейтинг">
+                <i class="fas fa-trophy"></i> <span>Рейтинг</span>
+            </a>
+            <a href="{{ url_for('education') }}" class="nav-link-custom" title="Обучение">
+                <i class="fas fa-graduation-cap"></i> <span>Обучение</span>
+            </a>
+        </nav>
+
+        <!-- Правая часть (Профиль) -->
+        <div class="header-right">
+            <a href="{{ url_for('shop') }}" class="currency-badge" title="Магазин">
+                <span id="currency-amount">{{ current_user.points if current_user else 0 }}</span> 
+                <i class="fas fa-coins" style="color: var(--accent-yellow);"></i>
+            </a>
+            
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('profile') }}" class="nav-link-custom" title="Профиль">
+                    <i class="fas fa-user-circle fa-lg"></i>
+                </a>
+                <a href="{{ url_for('logout') }}" class="nav-link-custom" style="color:var(--accent-red);" title="Выход">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
+                
+                <!-- Ссылка на админку (если админ) -->
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('admin_panel') }}" class="nav-link-custom" style="background:var(--primary-green); color:white;" title="Админка">
+                    <i class="fas fa-cogs"></i>
+                </a>
+                {% endif %}
             {% else %}
-                <div class="text-center py-4 text-muted">Нет активных пользователей</div>
+                <a href="{{ url_for('login') }}" class="nav-link-custom" style="font-weight:800;">Войти</a>
             {% endif %}
         </div>
-    </div>
-    
-    <div class="col-md-8">
-        <div class="table-container">
-            <div class="chart-header" style="padding: 20px; background:white; margin:0;">
-                <i class="fas fa-list"></i> Последние заявки
-            </div>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Название</th>
-                            <th>Категория</th>
-                            <th>Приоритет</th>
-                            <th>Статус</th>
-                            <th>Дата</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% if points %}
-                            {% for point in points[:10] %}
-                            <tr>
-                                <td>
-                                    <strong>{{ point.title }}</strong>
-                                </td>
-                                <td>
-                                    <span class="badge-custom cat-{{ point.category if point.category in ['pollution','plants','water'] else 'other' }}">
-                                        {{ point.category }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if point.severity >= 5 %}
-                                        <span style="color:var(--accent-red); font-weight:800;">Высокий</span>
-                                    {% elif point.severity >= 3 %}
-                                        <span style="color:#F1C40F; font-weight:700;">Средний</span>
-                                    {% else %}
-                                        <span style="color:#27AE60;">Низкий</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="status-{{ point.status }}">
-                                        {{ 'Решено' if point.status == 'completed' else 'В работе' if point.status == 'in_progress' else 'Новая' }}
-                                    </span>
-                                </td>
-                                <td>{{ point.created_at.strftime('%d.%m.%Y') }}</td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr><td colspan="5" class="text-center">Нет данных</td></tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <!-- Используем map-container для карт, page-container для остальных страниц -->
+    <main class="{% if request.endpoint == 'index' or request.endpoint == 'map' %}map-container{% else %}page-container{% endif %}">
+        
+        <!-- Flash Сообщения -->
+        <div class="alert-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
+                            <strong>{{ 'Ошибка!' if category == 'error' else 'Успешно!' }}</strong> {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
         </div>
-    </div>
-</div>
+		
+		<!-- Toast уведомления -->
+		<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+			<div id="liveToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+				<div class="d-flex">
+					<div class="toast-body">
+						<strong class="toast-title"></strong>
+						<span class="toast-message"></span>
+					</div>
+					<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+				</div>
+			</div>
+		</div>
 
-{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
 
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Получаем данные из Flask через Jinja2
-    const categoryData = {{ categories | tojson }};
-    const priorityData = {{ priorities | tojson }};
+    <!-- СКРИПТЫ -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Список городов с координатами для переключения
+        // Используем реальные координаты центров городов
+        const cities = [
+            {name: "Киселевск", lat: 53.9925, lng: 86.6669}, // Кемеровская обл
+            {name: "Ковдор", lat: 67.5661, lng: 30.4758},    // Мурманская обл (ЕвроХим)
+            {name: "Невинномысск", lat: 44.6333, lng: 41.9333},
+            {name: "Новомосковск", lat: 54.0167, lng: 38.3000},
+            {name: "Белореченск", lat: 44.7667, lng: 39.8667},
+            {name: "Кингисепп", lat: 59.3667, lng: 28.6000},
+            {name: "Усолье-Сибирское", lat: 52.7500, lng: 103.6500},
+            {name: "Ленинск-Кузнецкий", lat: 54.6667, lng: 86.1667},
+            {name: "Москва", lat: 55.7558, lng: 37.6176} // Для тестов
+        ];
 
-    // Настройка графика категорий (Pie Chart)
-    const ctxCat = document.getElementById('categoryChart').getContext('2d');
-    new Chart(ctxCat, {
-        type: 'doughnut',
-        data: {
-            labels: Object.keys(categoryData).length ? Object.keys(categoryData) : ['Нет данных'],
-            datasets: [{
-                data: Object.keys(categoryData).length ? Object.values(categoryData) : [1],
-                backgroundColor: [
-                    '#E74C3C', // Красный (Мусор)
-                    '#27AE60', // Зеленый (Растения)
-                    '#3498db', // Синий (Вода)
-                    '#F1C40F', // Желтый (Поломка)
-                    '#9b59b6', // Фиолетовый (Животные)
-                    '#95a5a6'  // Серый (Другое)
-                ],
-                borderWidth: 2,
-                borderColor: '#ffffff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'right', labels: { usePointStyle: true, font: { family: 'Segoe UI' } } }
+        // Управление выпадающим списком
+        function toggleCities() {
+            const el = document.getElementById('cityDropdown');
+            el.style.display = el.style.display === 'block' ? 'none' : 'block';
+        }
+
+        // Логика выбора города
+        function selectCity(name, lat, lng) {
+            // Сохраняем в localStorage
+            localStorage.setItem('selectedCity', name);
+            localStorage.setItem('cityLat', lat);
+            localStorage.setItem('cityLng', lng);
+            
+            // Обновляем текст в шапке
+            document.getElementById('currentCityName').innerText = name;
+            document.getElementById('cityDropdown').style.display = 'none';
+            
+            // Если мы на карте или в админке - перезагружаем страницу, 
+            // чтобы скрипты подхватили новые координаты
+            if(window.location.pathname === '/' || window.location.pathname === '/admin' || window.location.pathname === '/analytics') {
+                window.location.reload();
+            } else {
+                // Иначе просто показываем уведомление
+                // (можно добавить красивый тост, но пока алерт для надежности)
+                // alert('Город изменен на ' + name); 
             }
         }
-    });
 
-    // Настройка графика приоритетов (Bar Chart)
-    const ctxPri = document.getElementById('priorityChart').getContext('2d');
-    new Chart(ctxPri, {
-        type: 'bar',
-        data: {
-            labels: ['Низкий', 'Средний', 'Высокий', 'Критический'],
-            datasets: [{
-                label: 'Количество заявок',
-                data: [
-                    priorityData['Низкий'] || 0,
-                    priorityData['Средний'] || 0,
-                    priorityData['Высокий'] || 0,
-                    priorityData['Критический'] || 0
-                ],
-                backgroundColor: [
-                    '#27AE60',
-                    '#F1C40F',
-                    '#e67e22',
-                    '#E74C3C'
-                ],
-                borderRadius: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
-                x: { grid: { display: false } }
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            // Восстанавливаем сохраненный город или ставим дефолт
+            const savedCity = localStorage.getItem('selectedCity') || 'Киселевск';
+            const savedLat = localStorage.getItem('cityLat');
+            
+            // Если координат нет в хранилище (первый запуск), сохраняем дефолтные
+            if (!savedLat) {
+                localStorage.setItem('cityLat', 53.9925);
+                localStorage.setItem('cityLng', 86.6669);
             }
-        }
-    });
-</script>
-{% endblock %}
+            
+            document.getElementById('currentCityName').innerText = savedCity;
+            
+            // Генерируем список городов
+            const list = document.getElementById('cityList');
+            list.innerHTML = '';
+            
+            cities.forEach(c => {
+                const div = document.createElement('div');
+                div.className = `city-item ${c.name === savedCity ? 'active' : ''}`;
+                
+                // Добавляем галочку для активного города
+                const check = c.name === savedCity ? '<i class="fas fa-check"></i>' : '';
+                
+                div.innerHTML = `<span>${c.name}</span> ${check}`;
+                div.onclick = () => selectCity(c.name, c.lat, c.lng);
+                list.appendChild(div);
+            });
+        });
+        
+        // Закрыть меню при клике вне его области
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#cityBtn') && !e.target.closest('#cityDropdown')) {
+                document.getElementById('cityDropdown').style.display = 'none';
+            }
+        });
+		
+		// Система уведомлений
+		function showNotification(type, title, message, duration = 3000) {
+			const toastEl = document.getElementById('liveToast');
+			const toast = new bootstrap.Toast(toastEl, {
+				delay: duration,
+				autohide: true
+			});
+			
+			// Очищаем предыдущие классы
+			toastEl.className = 'toast align-items-center text-white border-0';
+			// Добавляем класс типа
+			toastEl.classList.add(type);
+			
+			// Устанавливаем содержимое
+			const titleEl = toastEl.querySelector('.toast-title');
+			const messageEl = toastEl.querySelector('.toast-message');
+			titleEl.textContent = title;
+			messageEl.textContent = message;
+			
+			toast.show();
+		}
+
+		// Заменяем стандартный alert
+		window.alert = function(message) {
+			showNotification('info', 'Внимание', message);
+		};
+
+		// Для совместимости - оставляем alert для критических ошибок
+		window.showAlert = function(type, title, message) {
+			showNotification(type, title, message);
+		};
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
