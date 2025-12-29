@@ -337,6 +337,12 @@
             <i class="fas fa-shopping-cart"></i> Заказы
         </button>
     </li>
+	<li class="nav-item" role="presentation">
+		<button class="nav-link" id="moderation-tab" data-bs-toggle="tab" data-bs-target="#moderation" type="button">
+			<i class="fas fa-gavel"></i> Модерация
+			<span id="pendingComplaintsBadge" class="badge bg-danger" style="display: none;">0</span>
+		</button>
+	</li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="sensors-tab" data-bs-toggle="tab" data-bs-target="#sensors" type="button">
             <i class="fas fa-microchip"></i> Сенсоры (IoT)
@@ -537,6 +543,132 @@
         </div>
     </div>
     
+	<!-- MODERATION TAB -->
+	<div class="tab-pane fade" id="moderation" role="tabpanel">
+		<div class="export-buttons">
+			<button class="btn btn-success" onclick="loadComplaints()">
+				<i class="fas fa-sync-alt"></i> Обновить
+			</button>
+			<button class="btn btn-info" onclick="showComplaintStats()">
+				<i class="fas fa-chart-bar"></i> Статистика
+			</button>
+		</div>
+		
+		<!-- Статистика жалоб -->
+		<div id="complaintStats" class="card mb-3" style="display: none;">
+			<div class="card-header">
+				<i class="fas fa-chart-pie"></i> Статистика жалоб
+			</div>
+			<div class="card-body">
+				<div class="row" id="statsContent">
+					<!-- Статистика загрузится через JS -->
+				</div>
+			</div>
+		</div>
+		
+		<!-- Фильтры -->
+		<div class="row mb-3">
+			<div class="col-md-3">
+				<select class="form-select" id="complaintFilter" onchange="filterComplaints()">
+					<option value="all">Все жалобы</option>
+					<option value="pending">На рассмотрении</option>
+					<option value="resolved">Обработанные</option>
+					<option value="rejected">Отклоненные</option>
+				</select>
+			</div>
+			<div class="col-md-3">
+				<select class="form-select" id="reasonFilter" onchange="filterComplaints()">
+					<option value="all">Все причины</option>
+					<option value="spam">Спам/Реклама</option>
+					<option value="fake">Фейк</option>
+					<option value="offensive">Оскорбительно</option>
+					<option value="duplicate">Дубликат</option>
+					<option value="other">Другое</option>
+				</select>
+			</div>
+		</div>
+		
+		<!-- Таблица жалоб -->
+		<div class="table-responsive">
+			<table class="table table-hover">
+				<thead>
+					<tr>
+						<th>ID</th>
+						<th>Проблема</th>
+						<th>Причина</th>
+						<th>Жалобщик</th>
+						<th>Дата</th>
+						<th>Статус</th>
+						<th>Действия</th>
+					</tr>
+				</thead>
+				<tbody id="complaintsTableBody">
+					<tr><td colspan="7" class="text-center">Нажмите "Обновить" для загрузки жалоб</td></tr>
+				</tbody>
+			</table>
+		</div>
+		
+		<!-- Модальное окно обработки жалобы -->
+		<div class="modal fade" id="resolveComplaintModal" tabindex="-1">
+			<div class="modal-dialog modal-lg">
+				<div class="modal-content">
+					<div class="modal-header" style="background: var(--primary-green); color: white;">
+						<h5 class="modal-title"><i class="fas fa-gavel"></i> Обработка жалобы #<span id="modalComplaintId"></span></h5>
+						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+					</div>
+					<div class="modal-body">
+						<input type="hidden" id="currentComplaintId">
+						
+						<!-- Информация о жалобе -->
+						<div class="mb-4">
+							<h6>Детали жалобы:</h6>
+							<div id="complaintDetails" class="p-3 bg-light rounded">
+								<!-- Загрузится через JS -->
+							</div>
+						</div>
+						
+						<!-- Информация о проблеме -->
+						<div class="mb-4">
+							<h6>Информация о проблеме:</h6>
+							<div id="problemDetails" class="p-3 bg-light rounded">
+								<!-- Загрузится через JS -->
+							</div>
+						</div>
+						
+						<!-- Выбор действия -->
+						<div class="mb-3">
+							<label class="form-label fw-bold">Выберите действие:</label>
+							<select class="form-select" id="complaintAction" onchange="updateActionWarning()">
+								<option value="delete_problem">🗑️ Удалить проблему</option>
+								<option value="reject">❌ Отклонить жалобу (необоснованная)</option>
+								<option value="ignore">✅ Отметить как обработанную (без действия)</option>
+							</select>
+							
+							<div class="alert alert-warning mt-2" id="deleteWarning" style="display: none;">
+								<i class="fas fa-exclamation-triangle"></i>
+								<strong>Внимание!</strong> Проблема будет полностью удалена вместе со всеми комментариями и голосами. Автору будут сняты баллы.
+							</div>
+						</div>
+						
+						<!-- Комментарий админа -->
+						<div class="mb-3">
+							<label class="form-label fw-bold">Комментарий модератора:</label>
+							<textarea class="form-control" id="adminComment" rows="3" 
+									  placeholder="Опишите причины принятого решения..."></textarea>
+							<small class="text-muted">Этот комментарий виден только администраторам.</small>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+						<button type="button" class="btn btn-success" onclick="processComplaintAction()">
+							<i class="fas fa-check"></i> Применить действие
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	
     <!-- SENSORS TAB -->
     <div class="tab-pane fade" id="sensors" role="tabpanel">
         <div class="export-buttons">
@@ -1017,5 +1149,488 @@
             alert(`${title}: ${message}`);
         }
     }
+
+	// ==========================================
+	// МОДЕРАЦИЯ ЖАЛОБ
+	// ==========================================
+
+	let complaintsData = [];
+
+	// Загрузка жалоб
+	async function loadComplaints() {
+		try {
+			showNotification('info', 'Загрузка', 'Загружаем список жалоб...');
+			
+			const response = await fetch('/api/complaints/all');
+			if (!response.ok) throw new Error('Ошибка сервера');
+			
+			complaintsData = await response.json();
+			renderComplaintsTable(complaintsData);
+			updatePendingBadge();
+			
+			showNotification('success', 'Успех', `Загружено ${complaintsData.length} жалоб`);
+		} catch (e) {
+			console.error('Ошибка загрузки жалоб:', e);
+			document.getElementById('complaintsTableBody').innerHTML = 
+				'<tr><td colspan="7" class="text-center text-danger">Ошибка загрузки жалоб: ' + e.message + '</td></tr>';
+			showNotification('error', 'Ошибка', 'Не удалось загрузить жалобы');
+		}
+	}
+
+	// Отображение таблицы жалоб
+	function renderComplaintsTable(complaints) {
+		const tbody = document.getElementById('complaintsTableBody');
+		
+		if (complaints.length === 0) {
+			tbody.innerHTML = '<tr><td colspan="7" class="text-center">Нет жалоб для отображения</td></tr>';
+			return;
+		}
+		
+		let html = '';
+		
+		complaints.forEach(complaint => {
+			// Статус
+			let statusBadge = '';
+			if (complaint.status === 'pending') {
+				statusBadge = '<span class="badge bg-warning">На рассмотрении</span>';
+			} else if (complaint.status === 'resolved') {
+				statusBadge = '<span class="badge bg-success">Обработана</span>';
+			} else {
+				statusBadge = '<span class="badge bg-danger">Отклонена</span>';
+			}
+			
+			// Обрезаем длинные названия
+			const problemTitle = complaint.problem_title && complaint.problem_title.length > 30 ? 
+				complaint.problem_title.substring(0, 30) + '...' : 
+				(complaint.problem_title || 'Проблема удалена');
+			
+			// Кнопки действий
+			let actionButtons = '';
+			if (complaint.status === 'pending') {
+				actionButtons = `
+					<button class="btn btn-sm btn-primary" onclick="openResolveModal(${complaint.id})" title="Обработать">
+						<i class="fas fa-cog"></i>
+					</button>
+					<button class="btn btn-sm btn-danger" onclick="quickRejectComplaint(${complaint.id})" title="Быстро отклонить">
+						<i class="fas fa-times"></i>
+					</button>
+				`;
+			} else {
+				actionButtons = `
+					<button class="btn btn-sm btn-info" onclick="viewComplaintDetails(${complaint.id})" title="Просмотр">
+						<i class="fas fa-eye"></i>
+					</button>
+					<button class="btn btn-sm btn-danger" onclick="deleteComplaint(${complaint.id})" title="Удалить">
+						<i class="fas fa-trash"></i>
+					</button>
+				`;
+			}
+			
+			html += `
+				<tr id="complaint-row-${complaint.id}">
+					<td>#${complaint.id}</td>
+					<td>
+						<strong>${problemTitle}</strong><br>
+						<small class="text-muted">ID: ${complaint.problem_id} | Статус: ${complaint.problem_status || 'удалена'}</small>
+					</td>
+					<td>${complaint.reason_text}</td>
+					<td>${complaint.user}</td>
+					<td>${complaint.created_at}</td>
+					<td>${statusBadge}</td>
+					<td class="user-actions">${actionButtons}</td>
+				</tr>
+			`;
+		});
+		
+		tbody.innerHTML = html;
+	}
+
+	// Фильтрация жалоб (убрали фильтр по времени)
+	function filterComplaints() {
+		const statusFilter = document.getElementById('complaintFilter').value;
+		const reasonFilter = document.getElementById('reasonFilter').value;
+		
+		let filtered = complaintsData;
+		
+		// Фильтр по статусу
+		if (statusFilter !== 'all') {
+			filtered = filtered.filter(c => c.status === statusFilter);
+		}
+		
+		// Фильтр по причине
+		if (reasonFilter !== 'all') {
+			filtered = filtered.filter(c => c.reason === reasonFilter);
+		}
+		
+		renderComplaintsTable(filtered);
+	}
+
+	// Обновление бейджа с количеством ожидающих жалоб
+	function updatePendingBadge() {
+		const pendingCount = complaintsData.filter(c => c.status === 'pending').length;
+		const badge = document.getElementById('pendingComplaintsBadge');
+		
+		if (pendingCount > 0) {
+			badge.textContent = pendingCount;
+			badge.style.display = 'inline-block';
+		} else {
+			badge.style.display = 'none';
+		}
+	}
+
+	// Показать статистику жалоб
+	async function showComplaintStats() {
+		const statsDiv = document.getElementById('complaintStats');
+		const contentDiv = document.getElementById('statsContent');
+		
+		if (statsDiv.style.display === 'none') {
+			contentDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Загрузка статистики...</div>';
+			statsDiv.style.display = 'block';
+			
+			try {
+				const response = await fetch('/api/complaints/stats');
+				const stats = await response.json();
+				
+				let html = `
+					<div class="col-md-3">
+						<div class="stat-card-admin">
+							<i class="fas fa-flag fa-2x"></i>
+							<div class="stat-number-admin">${stats.total}</div>
+							<p>Всего жалоб</p>
+						</div>
+					</div>
+					<div class="col-md-3">
+						<div class="stat-card-admin" style="background: #FFF3E0;">
+							<i class="fas fa-clock fa-2x" style="color: #E67E22;"></i>
+							<div class="stat-number-admin" style="color: #E67E22;">${stats.pending}</div>
+							<p>На рассмотрении</p>
+						</div>
+					</div>
+					<div class="col-md-3">
+						<div class="stat-card-admin" style="background: #E8F5E9;">
+							<i class="fas fa-check fa-2x" style="color: #27AE60;"></i>
+							<div class="stat-number-admin" style="color: #27AE60;">${stats.resolved}</div>
+							<p>Обработано</p>
+						</div>
+					</div>
+					<div class="col-md-3">
+						<div class="stat-card-admin" style="background: #FFEBEE;">
+							<i class="fas fa-times fa-2x" style="color: #E74C3C;"></i>
+							<div class="stat-number-admin" style="color: #E74C3C;">${stats.rejected}</div>
+							<p>Отклонено</p>
+						</div>
+					</div>
+				`;
+				
+				// Распределение по причинам
+				if (stats.reasons && Object.keys(stats.reasons).length > 0) {
+					html += `
+						<div class="col-md-12 mt-3">
+							<h6>Распределение по причинам (за 30 дней):</h6>
+							<div class="row">
+					`;
+					
+					for (const [reason, count] of Object.entries(stats.reasons)) {
+						const reasonText = {
+							'spam': 'Спам',
+							'fake': 'Фейк',
+							'offensive': 'Оскорбления',
+							'duplicate': 'Дубликат',
+							'other': 'Другое'
+						}[reason] || reason;
+						
+						html += `
+							<div class="col-md-2">
+								<div class="text-center p-2 border rounded">
+									<div class="fw-bold">${reasonText}</div>
+									<div class="text-primary fw-bold">${count}</div>
+								</div>
+							</div>
+						`;
+					}
+					
+					html += `</div></div>`;
+				}
+				
+				contentDiv.innerHTML = html;
+			} catch (e) {
+				contentDiv.innerHTML = '<div class="alert alert-danger">Ошибка загрузки статистики</div>';
+			}
+		} else {
+			statsDiv.style.display = 'none';
+		}
+	}
+
+	// Открыть модальное окно обработки жалобы
+	async function openResolveModal(complaintId) {
+		const complaint = complaintsData.find(c => c.id === complaintId);
+		if (!complaint) {
+			showNotification('error', 'Ошибка', 'Жалоба не найдена');
+			return;
+		}
+		
+		document.getElementById('currentComplaintId').value = complaintId;
+		document.getElementById('modalComplaintId').textContent = complaintId;
+		
+		// Заполняем информацию о жалобе
+		const complaintDetails = `
+			<strong>Причина:</strong> ${complaint.reason_text}<br>
+			<strong>Описание:</strong> ${complaint.description || '—'}<br>
+			<strong>Жалобщик:</strong> ${complaint.user}<br>
+			<strong>Дата создания:</strong> ${complaint.created_at}
+		`;
+		
+		// Заполняем информацию о проблеме
+		const problemDetails = `
+			<strong>Название:</strong> ${complaint.problem_title || 'Проблема будет удалена'}<br>
+			<strong>Статус проблемы:</strong> ${complaint.problem_status || 'удалена'}<br>
+			<strong>Автор:</strong> ${complaint.problem_user || 'Неизвестно'}<br>
+			<strong>ID проблемы:</strong> ${complaint.problem_id}
+		`;
+		
+		document.getElementById('complaintDetails').innerHTML = complaintDetails;
+		document.getElementById('problemDetails').innerHTML = problemDetails;
+		document.getElementById('adminComment').value = '';
+		document.getElementById('complaintAction').value = 'delete_problem';
+		updateActionWarning();
+		
+		// Показываем модальное окно
+		const modal = new bootstrap.Modal(document.getElementById('resolveComplaintModal'));
+		modal.show();
+	}
+
+	// Обновление предупреждения в зависимости от выбранного действия
+	function updateActionWarning() {
+		const action = document.getElementById('complaintAction').value;
+		const deleteWarning = document.getElementById('deleteWarning');
+		
+		// Убираем предупреждение warning
+		deleteWarning.style.display = action === 'delete_problem' ? 'block' : 'none';
+		
+		// Убираем элемент warningAlert если он есть
+		const warningAlert = document.getElementById('warningAlert');
+		if (warningAlert) {
+			warningAlert.style.display = 'none';
+		}
+	}
+
+	// Обработка выбранного действия
+	async function processComplaintAction() {
+		const complaintId = document.getElementById('currentComplaintId').value;
+		const action = document.getElementById('complaintAction').value;
+		const adminComment = document.getElementById('adminComment').value;
+		
+		const actionTexts = {
+			'delete_problem': 'Удалить проблему',
+			'reject': 'Отклонить жалобу',
+			'ignore': 'Отметить как обработанную'
+		};
+		
+		if (!confirm(`Вы уверены, что хотите выполнить действие: "${actionTexts[action] || action}"?`)) {
+			return;
+		}
+		
+		try {
+			const response = await fetch(`/api/complaints/${complaintId}/resolve`, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify({
+					action: action,
+					admin_comment: adminComment
+				})
+			});
+			
+			const result = await response.json();
+			
+			if (result.status === 'success') {
+				showNotification('success', 'Успех', 'Жалоба успешно обработана');
+				
+				// Если удалили проблему - обновляем карту
+				if (action === 'delete_problem') {
+					refreshMapMarkers();
+				}
+				
+				// Закрываем модальное окно
+				const modal = bootstrap.Modal.getInstance(document.getElementById('resolveComplaintModal'));
+				modal.hide();
+				
+				// Обновляем список жалоб
+				setTimeout(loadComplaints, 500);
+			} else {
+				showNotification('error', 'Ошибка', result.message || 'Ошибка обработки жалобы');
+			}
+		} catch (e) {
+			console.error('Ошибка обработки жалобы:', e);
+			showNotification('error', 'Ошибка', 'Не удалось обработать жалобу');
+		}
+	}
+
+	// Быстрое отклонение жалобы
+	async function quickRejectComplaint(complaintId) {
+		if (!confirm('Отклонить эту жалобу как необоснованную?')) {
+			return;
+		}
+		
+		try {
+			const response = await fetch(`/api/complaints/${complaintId}/reject`, {
+				method: 'POST'
+			});
+			
+			const result = await response.json();
+			
+			if (result.status === 'success') {
+				showNotification('success', 'Успех', 'Жалоба отклонена');
+				
+				// Обновляем строку в таблице
+				const row = document.getElementById(`complaint-row-${complaintId}`);
+				if (row) {
+					const statusCell = row.cells[5];
+					statusCell.innerHTML = '<span class="badge bg-danger">Отклонена</span>';
+					
+					// Обновляем кнопки
+					const actionsCell = row.cells[6];
+					actionsCell.innerHTML = `
+						<button class="btn btn-sm btn-info" onclick="viewComplaintDetails(${complaintId})" title="Просмотр">
+							<i class="fas fa-eye"></i>
+						</button>
+						<button class="btn btn-sm btn-danger" onclick="deleteComplaint(${complaintId})" title="Удалить">
+							<i class="fas fa-trash"></i>
+						</button>
+					`;
+				}
+				
+				updatePendingBadge();
+			} else {
+				showNotification('error', 'Ошибка', result.message || 'Ошибка отклонения жалобы');
+			}
+		} catch (e) {
+			console.error('Ошибка отклонения жалобы:', e);
+			showNotification('error', 'Ошибка', 'Не удалось отклонить жалобу');
+		}
+	}
+
+	// Просмотр деталей жалобы (ИСПРАВЛЕНО)
+	function viewComplaintDetails(complaintId) {
+		const complaint = complaintsData.find(c => c.id === complaintId);
+		if (!complaint) {
+			showNotification('error', 'Ошибка', 'Жалоба не найдена');
+			return;
+		}
+		
+		// Формируем детали без HTML тегов
+		let details = `ID жалобы: #${complaint.id}\n`;
+		details += `Проблема: ${complaint.problem_title || 'Проблема удалена'}\n`;
+		details += `ID проблемы: ${complaint.problem_id}\n`;
+		details += `Причина: ${complaint.reason_text}\n`;
+		details += `Описание: ${complaint.description || '—'}\n`;
+		details += `Жалобщик: ${complaint.user}\n`;
+		details += `Дата создания: ${complaint.created_at}\n`;
+		details += `Статус: ${complaint.status_text}\n`;
+		
+		if (complaint.resolved_at) {
+			details += `Дата обработки: ${complaint.resolved_at}\n`;
+			details += `Обработал: ${complaint.resolved_by || 'Система'}\n`;
+			if (complaint.admin_comment) {
+				details += `Комментарий модератора: ${complaint.admin_comment}\n`;
+			}
+		}
+		
+		// Показываем в модальном окне или отдельном диалоге
+		const modalHtml = `
+			<div class="modal fade" id="viewComplaintModal" tabindex="-1">
+				<div class="modal-dialog">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title">Детали жалобы #${complaint.id}</h5>
+							<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+						</div>
+						<div class="modal-body">
+							<pre style="white-space: pre-wrap; font-family: inherit; background: #f8f9fa; padding: 10px; border-radius: 5px;">${details}</pre>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		`;
+		
+		// Удаляем старый модальный если есть
+		const oldModal = document.getElementById('viewComplaintModal');
+		if (oldModal) oldModal.remove();
+		
+		// Добавляем новый модальный
+		document.body.insertAdjacentHTML('beforeend', modalHtml);
+		
+		// Показываем модальный
+		const modal = new bootstrap.Modal(document.getElementById('viewComplaintModal'));
+		modal.show();
+	}
+
+	// Удаление жалобы
+	async function deleteComplaint(complaintId) {
+		if (!confirm('Удалить эту жалобу из системы?\nЭто действие нельзя отменить.')) {
+			return;
+		}
+		
+		try {
+			const response = await fetch(`/api/complaints/${complaintId}/delete`, {
+				method: 'POST'
+			});
+			
+			const result = await response.json();
+			
+			if (result.status === 'success') {
+				showNotification('success', 'Успех', 'Жалоба удалена');
+				
+				// Удаляем строку из таблицы
+				const row = document.getElementById(`complaint-row-${complaintId}`);
+				if (row) {
+					row.remove();
+				}
+				
+				// Обновляем данные
+				complaintsData = complaintsData.filter(c => c.id !== complaintId);
+				updatePendingBadge();
+			} else {
+				showNotification('error', 'Ошибка', result.message || 'Ошибка удаления жалобы');
+			}
+		} catch (e) {
+			console.error('Ошибка удаления жалобы:', e);
+			showNotification('error', 'Ошибка', 'Не удалось удалить жалобу');
+		}
+	}
+
+	// Автоматическая загрузка жалоб при открытии вкладки
+	document.getElementById('moderation-tab').addEventListener('shown.bs.tab', function() {
+		loadComplaints();
+	});
+	
+	// Функция для обновления маркеров на карте
+	async function refreshMapMarkers() {
+		try {
+			// Пытаемся вызвать функцию обновления карты через глобальное окно
+			if (window.opener && typeof window.opener.refreshMapFromAdmin === 'function') {
+				window.opener.refreshMapFromAdmin();
+			}
+			
+			// Если функция доступна в текущем окне (пользователь на карте)
+			if (typeof window.refreshMapFromAdmin === 'function') {
+				window.refreshMapFromAdmin();
+			}
+			
+			// Альтернативный способ: обновляем через iframe или перезагрузку
+			setTimeout(() => {
+				// Отправляем событие обновления для всех открытых карт
+				window.dispatchEvent(new CustomEvent('mapNeedsRefresh'));
+			}, 100);
+			
+			console.log('Карта обновлена после удаления проблемы');
+			
+		} catch (e) {
+			console.error('Ошибка обновления карты:', e);
+		}
+	}
+		
 </script>
 {% endblock %}
