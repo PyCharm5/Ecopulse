@@ -474,27 +474,36 @@
     
     // Загрузка проблем с API
     async function loadProblems() {
-        try {
-            const response = await fetch('/api/problems');
-            const problems = await response.json();
-            
-            console.log('Загружено проблем:', problems.length);
-            
-            // Очищаем старые маркеры
-            for (let id in markers) {
-                map.removeLayer(markers[id]);
-            }
-            markers = {};
-            
-            // Добавляем новые
-            problems.forEach(p => {
-                addMarkerToMap(p);
-            });
-            
-        } catch (error) {
-            console.error('Ошибка загрузки проблем:', error);
-        }
-    }
+		try {
+			const response = await fetch('/api/problems');
+			const problems = await response.json();
+			
+			console.log('Загружено проблем:', problems.length);
+			
+			// Очищаем старые маркеры
+			for (let id in markers) {
+				map.removeLayer(markers[id]);
+			}
+			markers = {};
+			
+			// Добавляем новые маркеры только для существующих проблем
+			problems.forEach(p => {
+				addMarkerToMap(p);
+			});
+			
+			// Удаляем маркеры проблем, которые больше не существуют в БД
+			// (обработка удаленных через модерацию)
+			Object.keys(markers).forEach(markerId => {
+				if (!problems.find(p => p.id == markerId)) {
+					map.removeLayer(markers[markerId]);
+					delete markers[markerId];
+				}
+			});
+			
+		} catch (error) {
+			console.error('Ошибка загрузки проблем:', error);
+		}
+	}
     
     // Добавление маркера на карту
     function addMarkerToMap(p) {
@@ -640,8 +649,16 @@
     }
     
     // --- ПРОСМОТР И ДЕЙСТВИЯ ---
-    
-    // ОБЯЗАТЕЛЬНО ОБЪЯВЛЯЕМ КАК ГЛОБАЛЬНУЮ ФУНКЦИЮ
+    // Глобальная функция для обновления карты из админки
+	window.refreshMapFromAdmin = function() {
+		console.log('Обновление карты из админки...');
+		if (typeof loadProblems === 'function') {
+			loadProblems();
+			return true;
+		}
+		return false;
+	};
+	
     window.openViewModal = function(p) {
         console.log('Открытие модального окна для проблемы:', p.id);
         
