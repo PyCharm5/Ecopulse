@@ -536,31 +536,5 @@
             showNotification('error', 'Ошибка', 'Ошибка соединения');
         }
     }
-    
-    // Для тестирования - быстрое завершение без фото
-    async function completeSimple(taskId) {
-        if(!confirm('Завершить задачу без фотоотчета? (только для тестирования)')) return;
-        
-        try {
-            const response = await fetch(`/api/problems/${taskId}/complete_simple`, { method: 'POST' });
-            const result = await response.json();
-            
-            if (result.status === 'success') {
-                showNotification('success', 'Успех', `Задача выполнена! Начислено +${result.reward} баллов`);
-                
-                // Обновляем баланс
-                const balanceEl = document.getElementById('currency-amount');
-                if(balanceEl && result.new_balance) {
-                    balanceEl.innerText = result.new_balance;
-                }
-                
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showNotification('error', 'Ошибка', result.message);
-            }
-        } catch (error) {
-            showNotification('error', 'Ошибка', 'Ошибка соединения');
-        }
-    }
 </script>
 {% endblock %}
