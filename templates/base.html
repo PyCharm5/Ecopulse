@@ -371,15 +371,7 @@
             document.getElementById('currentCityName').innerText = name;
             document.getElementById('cityDropdown').style.display = 'none';
             
-            // Если мы на карте или в админке - перезагружаем страницу, 
-            // чтобы скрипты подхватили новые координаты
-            if(window.location.pathname === '/' || window.location.pathname === '/admin' || window.location.pathname === '/analytics') {
-                window.location.reload();
-            } else {
-                // Иначе просто показываем уведомление
-                // (можно добавить красивый тост, но пока алерт для надежности)
-                // alert('Город изменен на ' + name); 
-            }
+            window.location.reload();
         }
 
         // Инициализация при загрузке
