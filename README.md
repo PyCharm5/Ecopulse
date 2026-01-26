@@ -1,2 +1,2 @@
 # Ecopulse
-Ver 0.5
+Ver 0.6
