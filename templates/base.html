@@ -202,12 +202,74 @@
         .alert-danger { border-left-color: var(--accent-red); }
         
         /* Адаптив */
-        @media (max-width: 768px) {
-            .main-header { padding: 0 15px; }
-            .nav-link-custom span { display: none; } /* Скрываем текст меню на мобильных */
-            .nav-link-custom i { font-size: 1.2rem; }
-            .city-dropdown { left: -50px; }
-        }
+        /* 1. Скрываем мобильное меню по умолчанию (для ПК) */
+		.mobile-nav { 
+			display: none !important; /* Скрыто везде по умолчанию */
+		}
+	
+		@media (min-width: 769px) {
+			.nav-center { display: flex !important; }
+			.header-right .nav-link-custom { display: flex !important; }
+			.mobile-nav { display: none !important; }
+			.page-container { width: 1000px; margin: 20px auto; }
+		}
+		
+		/* 2. Показываем только на экранах меньше 768px */
+		@media (max-width: 768px) {
+			/* 1. Прячем десктопную навигацию */
+			.nav-center, 
+			.header-right .nav-link-custom[title="Профиль"], 
+			.header-right .nav-link-custom[title="Выход"],
+			.header-right .nav-link-custom[title="Админка"] { 
+				display: none !important; 
+			}
+
+			/* 2. Показываем мобильное меню */
+			.mobile-nav {
+				display: flex !important;
+				position: fixed;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				background: white;
+				height: 70px;
+				border-top: 2px solid var(--primary-green);
+				justify-content: space-around;
+				align-items: center;
+				z-index: 9999;
+				padding-bottom: env(safe-area-inset-bottom);
+			}
+
+			/* 3. Стили кнопок мобильного меню */
+			.mobile-nav-item {
+				color: #666 !important;
+				text-decoration: none !important;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				flex: 1;
+				font-size: 10px;
+				font-weight: bold;
+			}
+
+			.mobile-nav-item i {
+				font-size: 20px;
+				margin-bottom: 3px;
+			}
+
+			.mobile-nav-item.active {
+				color: var(--primary-green) !important;
+			}
+
+			/* 4. Контейнер и отступы */
+			.page-container { 
+				width: 95% !important; 
+				max-width: none !important;
+				margin: 15px auto 100px auto !important; /* Большой отступ снизу */
+			}
+			
+			body { padding-bottom: 80px; }
+		}
 		
 		/* Toast уведомления */
 		.toast-container {
@@ -227,6 +289,13 @@
 
 		.toast-message {
 			font-weight: 500;
+		}
+		
+		.page-container {
+			max-width: 1000px;
+			width: 100%; /* Обязательно 100%, чтобы подстраиваться под телефон */
+			margin: 20px auto;
+			padding: 0 10px; /* Чтобы текст не прилипал к краям экрана */
 		}
     </style>
     {% block extra_css %}{% endblock %}
@@ -334,6 +403,42 @@
 
         {% block content %}{% endblock %}
     </main>
+	
+	<footer style="background-color: var(--bg-beige); border-top: 1px solid #dcdcdc; padding: 20px 0; margin-top: auto;">
+        <div class="container" style="text-align: center; color: #666; font-size: 0.9rem;">
+            <p style="margin-bottom: 5px;">&copy; 2026 Профкоманды ФМ</p>
+            <a href="{{ url_for('policy') }}" style="color: var(--primary-green); text-decoration: none; font-weight: 600;">
+                Политика обработки персональных данных
+            </a>
+        </div>
+    </footer>
+	
+	<nav class="mobile-nav">
+		<a href="{{ url_for('index') }}" class="mobile-nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+			<i class="fas fa-map"></i><span>Карта</span>
+		</a>
+		<a href="{{ url_for('tasks') }}" class="mobile-nav-item {% if request.endpoint == 'tasks' %}active{% endif %}">
+			<i class="fas fa-tasks"></i><span>Задания</span>
+		</a>
+		
+		{% if current_user.is_authenticated and current_user.is_admin %}
+		<a href="{{ url_for('admin_panel') }}" class="mobile-nav-item {% if request.endpoint == 'admin_panel' %}active{% endif %}">
+			<i class="fas fa-user-shield"></i><span>Админ</span>
+		</a>
+		{% endif %}
+
+		<a href="{{ url_for('rating') }}" class="mobile-nav-item {% if request.endpoint == 'rating' %}active{% endif %}">
+			<i class="fas fa-trophy"></i><span>Топ</span>
+		</a>
+		
+		<a href="{{ url_for('profile') }}" class="mobile-nav-item {% if request.endpoint == 'profile' %}active{% endif %}">
+			<i class="fas fa-user"></i><span>Профиль</span>
+		</a>
+
+		<a href="{{ url_for('logout') }}" class="mobile-nav-item" style="color: #e74c3c !important;">
+			<i class="fas fa-sign-out-alt"></i><span>Выход</span>
+		</a>
+	</nav>
 
     <!-- СКРИПТЫ -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
