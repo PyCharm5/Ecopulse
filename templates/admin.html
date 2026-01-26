@@ -236,6 +236,39 @@
         gap: 10px;
         margin-bottom: 20px;
     }
+	
+	@media (max-width: 768px) {
+		/* Делаем область контента под вкладками адаптивной */
+		.tab-content {
+			width: 100%;
+			overflow-x: hidden; /* Чтобы сама страница не дергалась */
+		}
+
+		.tab-pane {
+			width: 100%;
+		}
+
+		/* Автоматическая прокрутка для всех таблиц в админке */
+		.table-responsive, 
+		table, 
+		.admin-card, 
+		.user-list-item {
+			max-width: 100%;
+			overflow-x: auto;
+			display: block; /* Позволяет блоку скроллиться, если он шире экрана */
+			-webkit-overflow-scrolling: touch;
+		}
+
+		/* Уменьшаем отступы, чтобы на маленьком экране было больше места для текста */
+		.admin-header {
+			padding: 15px !important;
+			margin-bottom: 20px !important;
+		}
+		
+		.admin-header h1 {
+			font-size: 1.4rem !important;
+		}
+	}
 </style>
 {% endblock %}
 
@@ -325,11 +358,6 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="points-tab" data-bs-toggle="tab" data-bs-target="#points" type="button">
             <i class="fas fa-map-marker-alt"></i> Точки
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button">
-            <i class="fas fa-tasks"></i> Задачи
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -456,53 +484,6 @@
                         <td class="user-actions">
                             <button class="btn btn-sm btn-info" onclick="editPoint({{ point.id }})"><i class="fas fa-edit"></i></button>
                             <button class="btn btn-sm btn-danger" onclick="deletePoint({{ point.id }})"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <!-- TASKS TAB -->
-    <div class="tab-pane fade" id="tasks" role="tabpanel">
-        <div class="export-buttons">
-            <button class="btn btn-primary" onclick="createTask()"><i class="fas fa-plus"></i> Создать задачу</button>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Описание</th>
-                        <th>Статус</th>
-                        <th>Исполнитель</th>
-                        <th>Срок</th>
-                        <th>Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for task in tasks %}
-                    <tr>
-                        <td>{{ task.id }}</td>
-                        <td>
-                            {{ task.description }}
-                            {% if task.point %}
-                            <br><small class="text-muted">Точка: {{ task.point.title }}</small>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if task.status == 'pending' %}
-                            <span class="badge bg-warning">Ожидает</span>
-                            {% elif task.status == 'in_progress' %}
-                            <span class="badge bg-info">В работе</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ task.worker.username if task.worker else '—' }}</td>
-                        <td>—</td>
-                        <td class="user-actions">
-                            <button class="btn btn-sm btn-info"><i class="fas fa-edit"></i></button>
-                            <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
                     {% endfor %}
