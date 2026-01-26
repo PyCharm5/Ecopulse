@@ -2,6 +2,7 @@
 {% block title %}Карта проблем{% endblock %}
 {% block extra_css %}
 <style>
+    /* Скрываем флаг Leaflet для чистоты */
     .leaflet-attribution-flag {
         display: none !important;
     }
@@ -288,7 +289,14 @@
         .problem-modal { width: 95vw; height: auto; max-height: 95vh; }
         .form-section { padding: 15px; }
         .category-grid { grid-template-columns: repeat(2, 1fr); }
-    }
+		#map {
+			height: calc(100vh - 130px) !important; /* Карта почти на весь экран */
+			margin: -15px; /* Убираем стандартные отступы контейнера */
+		}
+		.map-controls {
+			bottom: 80px; /* Поднимаем кнопки управления над нижним меню */
+		}
+	}
     
     .btn-like.active { color: #27AE60 !important; }
     .btn-dislike.active { color: #E74C3C !important; }
@@ -450,26 +458,46 @@
 
     // Инициализация карты
     function initMap() {
-        // Получаем координаты города из localStorage (сохраненные в base.html)
-        const cityLat = parseFloat(localStorage.getItem('cityLat')) || 53.9925; // Дефолт Киселевск
-        const cityLng = parseFloat(localStorage.getItem('cityLng')) || 86.6669;
-        
-        map = L.map('map').setView([cityLat, cityLng], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(map);
-        
-        // Обработчик клика по карте
-        map.on('click', function(e) {
-            currentLatLng = e.latlng;
-            openAddModal();
-        });
-        
-        // Загрузка точек
-        loadProblems();
-    }
+		const cityLat = parseFloat(localStorage.getItem('cityLat')) || 53.9925;
+		const cityLng = parseFloat(localStorage.getItem('cityLng')) || 86.6669;
+
+		// Проверяем, мобильное ли это устройство
+		const isMobile = window.innerWidth <= 768;
+
+		map = L.map('map', {
+			// Если мобильный — отключаем перетаскивание одним пальцем
+			dragging: !isMobile,
+			// Позволяет прокручивать страницу, если ведешь одним пальцем по карте
+			tap: !isMobile,
+			scrollWheelZoom: false // Отключаем зум колесиком (чтобы случайно не увеличить)
+		}).setView([cityLat, cityLng], 13);
+
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: '© OpenStreetMap contributors',
+			maxZoom: 19
+		}).addTo(map);
+
+		// Добавляем кнопки зума в удобное место (опционально)
+		L.control.zoom({ position: 'topright' }).addTo(map);
+
+		// Если это мобильный, разрешаем перемещение карты только двумя пальцами
+		if (isMobile) {
+			map.on('touchstart', function (e) {
+				if (e.originalEvent.touches.length > 1) {
+					map.dragging.enable();
+				} else {
+					map.dragging.disable();
+				}
+			});
+		}
+
+		map.on('click', function(e) {
+			currentLatLng = e.latlng;
+			openAddModal();
+		});
+
+		loadProblems();
+	}
     
     // Загрузка проблем с API
     async function loadProblems() {
