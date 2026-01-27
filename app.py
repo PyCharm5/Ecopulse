@@ -16,6 +16,9 @@ from models import db, User, Problem, Complaint, Comment, TaskCompletion, Order,
 from decorators import admin_required
 from constants import ProblemStatus, ProblemSeverity, ProblemCategory, OrderStatus, ComplaintStatus, ConfigDefaults
 from utils import save_uploaded_file, get_coordinates_from_request, json_response, is_valid_image_file
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -180,9 +183,14 @@ def shop():
 @login_required
 def education():
     return render_template('education.html')
+    
+@app.route('/policy')
+def policy():
+    return render_template('policy.html')
 
 @app.route('/analytics')
 @login_required
+@admin_required
 def analytics():
     problems = Problem.query.all()
     users = User.query.all()
@@ -741,6 +749,46 @@ def update_balance():
     current_user.points += amount
     db.session.commit()
     return json_response('success', {'new_balance': current_user.points}, 'Баланс обновлен')
+    
+@app.route('/api/user/avatar', methods=['POST'])
+@login_required
+def upload_avatar():
+    # Проверяем, есть ли файл в запросе
+    if 'avatar' not in request.files:
+        return jsonify({'status': 'error', 'message': 'Файл не найден'}), 400
+    
+    file = request.files['avatar']
+    
+    # Если пользователь не выбрал файл
+    if file.filename == '':
+        return jsonify({'status': 'error', 'message': 'Файл не выбран'}), 400
+
+    # Проверка расширения файла (функция есть в вашем utils.py)
+    if not is_valid_image_file(file.filename):
+        return jsonify({'status': 'error', 'message': 'Разрешены только изображения (jpg, png, gif)'}), 400
+
+    try:
+        # Сохраняем файл через вашу утилиту
+        # Она вернет путь вида '/static/uploads/avatar_12345.jpg'
+        file_url = save_uploaded_file(file, prefix=f"avatar_user_{current_user.id}")
+        
+        if file_url:
+            # Обновляем запись в базе данных
+            current_user.avatar = file_url
+            db.session.commit()
+            
+            return jsonify({
+                'status': 'success', 
+                'message': 'Аватар успешно обновлен',
+                'avatar_url': file_url
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'Ошибка при сохранении файла'}), 500
+            
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Avatar upload error: {e}")
+        return jsonify({'status': 'error', 'message': 'Ошибка сервера'}), 500
 
 @app.route('/api/orders', methods=['GET'])
 @login_required
@@ -1127,6 +1175,9 @@ def resolve_complaint(complaint_id):
         if complaint.status != ComplaintStatus.PENDING:
             return json_response('error', {}, 'Жалоба уже обработана', 400)
         
+        # Сохраняем ID проблемы перед возможным удалением
+        problem_id = complaint.problem_id
+        
         # Выполняем выбранное действие
         if action == 'delete_problem':
             if complaint.problem:
@@ -1139,15 +1190,23 @@ def resolve_complaint(complaint_id):
                     problem.user.total_reports = max(0, problem.user.total_reports - 1)
                     db.session.add(problem.user)
                 
-                # Удаляем связанные записи
-                Comment.query.filter_by(problem_id=problem.id).delete()
+                # Удаляем связанные записи, НО НЕ УДАЛЯЕМ САМУ ЖАЛОБУ
+                # 1. Голоса
                 Vote.query.filter_by(problem_id=problem.id).delete()
+                
+                # 2. Комментарии
+                Comment.query.filter_by(problem_id=problem.id).delete()
+                
+                # 3. Отчеты о выполнении
                 TaskCompletion.query.filter_by(problem_id=problem.id).delete()
                 
-                # Сначала удаляем связанные жалобы на эту проблему
-                Complaint.query.filter_by(problem_id=problem.id).delete()
+                # 4. ДРУГИЕ жалобы на эту проблему (но не текущую!)
+                Complaint.query.filter(
+                    Complaint.problem_id == problem.id,
+                    Complaint.id != complaint_id
+                ).delete()
                 
-                # Теперь удаляем саму проблему
+                # 5. Теперь удаляем саму проблему
                 db.session.delete(problem)
                 action_taken = 'problem_deleted'
                 
@@ -1162,7 +1221,7 @@ def resolve_complaint(complaint_id):
         else:
             return json_response('error', {}, 'Неизвестное действие', 400)
         
-        # Обновляем статус жалобы
+        # Обновляем статус жалобы (НЕ удаляем жалобу!)
         complaint.status = ComplaintStatus.RESOLVED
         complaint.resolved_at = datetime.utcnow()
         complaint.resolved_by = current_user.id
@@ -1177,7 +1236,7 @@ def resolve_complaint(complaint_id):
         app.logger.error(f"Error resolving complaint: {e}")
         db.session.rollback()
         return json_response('error', {}, f'Ошибка: {str(e)}', 500)
-
+        
 @app.route('/api/complaints/<int:complaint_id>/reject', methods=['POST'])
 @login_required
 @admin_required
@@ -1378,4 +1437,6 @@ def init_db():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, port=5000)
+    app.run(debug=False)
+    #app.run(debug=False, port=5000)
+    #app.run(debug=True, port=5000, host='192.168.0.162')
