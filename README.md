@@ -1,2 +1,2 @@
 # Ecopulse
-Ver 0.6
+Ver 1.0 (MVP)
